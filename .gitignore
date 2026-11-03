@@ -1,0 +1,32 @@
+.env
+**/.env.local
+**/node_modules/
+**/.next/
+**/target/
+backend/data/
+*.log
+.DS_Store
+
+# Additional environment files
+.env.*
+!.env.example
+**/.env.*
+!**/.env.example
+
+# Private credentials
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Runtime data and uploads
+**/uploads/
+
+# Build and test output
+dist/
+coverage/
+
+# Windows files
+Thumbs.db
