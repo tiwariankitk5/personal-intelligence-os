@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
@@ -128,7 +130,7 @@ public class ChatGptPlanService {
                 """,
                 stateHash, launchHash, userId, nonce, encryption.encrypt(verifier), redirectUri,
                 registration == null ? null : registration.clientId(), hostId,
-                encryption.encrypt(openAiAuthorizationUrl), expiresAt);
+                encryption.encrypt(openAiAuthorizationUrl), dbTimestamp(expiresAt));
 
         String launchUrl = UriComponentsBuilder.fromUriString(redirectUri)
                 .replacePath("/auth/start").replaceQuery(null)
@@ -239,8 +241,8 @@ public class ChatGptPlanService {
                     stateHash, attempt.userId(), clientId, subject, email, name, picture,
                     encryption.encrypt(idToken), planEnabled ? encryption.encrypt(accessToken) : null,
                     planEnabled && refreshToken != null ? encryption.encrypt(refreshToken) : null,
-                    String.join(" ", scopes), planEnabled, planEnabled ? expiresAt : null,
-                    Instant.now().plusSeconds(600));
+                    String.join(" ", scopes), planEnabled, dbTimestamp(planEnabled ? expiresAt : null),
+                    dbTimestamp(Instant.now().plusSeconds(600)));
 
             return callbackPage(true,
                     "ChatGPT authorisation is complete. Return to the PIOS tab to confirm linking this account.",
@@ -291,7 +293,7 @@ public class ChatGptPlanService {
             jdbc.update("""
                     INSERT INTO ai_chatgpt_registrations(user_id,client_id,ext_agent_host_id,openai_subject,created_at,updated_at)
                     VALUES (?,?,?,?,?,now())
-                    """, userId, account.clientId(), hostId(), account.subject(), Instant.now());
+                    """, userId, account.clientId(), hostId(), account.subject(), dbTimestamp(Instant.now()));
         }
         jdbc.update("""
                 INSERT INTO ai_chatgpt_connections
@@ -310,7 +312,7 @@ public class ChatGptPlanService {
                 """,
                 UUID.randomUUID(), userId, account.clientId(), account.subject(), account.email(), account.displayName(), account.pictureUrl(),
                 account.encryptedIdToken(), account.encryptedAccessToken(), account.encryptedRefreshToken(),
-                account.grantedScopes(), account.planUsageEnabled(), account.tokenExpiresAt());
+                account.grantedScopes(), account.planUsageEnabled(), dbTimestamp(account.tokenExpiresAt()));
 
         if (!account.planUsageEnabled()) removeChatGptProvider(userId);
         return status(userId);
@@ -471,7 +473,7 @@ public class ChatGptPlanService {
                         token_expires_at=?,updated_at=now()
                     WHERE user_id=?
                     """, encryption.encrypt(access), encryption.encrypt(refresh), scope,
-                    Instant.now().plusSeconds(Math.max(60, expiresIn)), userId);
+                    dbTimestamp(Instant.now().plusSeconds(Math.max(60, expiresIn))), userId);
             return access;
         }
     }
@@ -604,6 +606,11 @@ public class ChatGptPlanService {
                 rs.getString("granted_scopes"), rs.getBoolean("plan_usage_enabled"),
                 rs.getTimestamp("token_expires_at") == null ? null : rs.getTimestamp("token_expires_at").toInstant(),
                 rs.getTimestamp("connected_at") == null ? null : rs.getTimestamp("connected_at").toInstant()) : null, userId);
+    }
+
+    /** Converts Java instants to a JDBC type supported by PostgreSQL TIMESTAMPTZ columns. */
+    private static OffsetDateTime dbTimestamp(Instant value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
     private String hostId() {
