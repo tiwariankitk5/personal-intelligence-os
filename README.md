@@ -8,7 +8,7 @@ This is a **runnable V1 foundation**, not the complete long-term PIOS vision or 
 
 - Register and sign in with email/password; passwords are BCrypt-hashed and API access uses signed JWTs.
 - User-scoped workspace data: folders, notes, sources, learning objectives, AI provider connections and chat conversations.
-- Persistent note editor with rich-text formatting, pin/archive, colours, search, sorting, drag reorder, folder creation and quick capture. Notes are stored in PostgreSQL, not browser-only local storage.
+- Persistent Notion-style note editor with rich-text headings, lists and checklists, slash-command block insertion, Java/SQL/terminal/HTTP/LaTeX code snippets, safe YouTube embeds, and an in-note drawing canvas with pen, line, arrow, rectangle, ellipse, eraser and undo. Notes are stored in PostgreSQL, not browser-only local storage.
 - Destination suggestions for quick capture using local keyword matching. Users can choose a folder, create a folder, append to a similar existing page or create a separate note. The current suggestion logic is heuristic, not an autonomous AI agent.
 - Upload PDF, TXT, Markdown and paste text as knowledge sources. Text is extracted, stored in PostgreSQL and chunked. Uploaded originals are stored in a Docker volume. Text-based PDFs are supported; scanned PDFs require OCR and are not yet supported.
 - Search stored source titles and text.
@@ -113,7 +113,7 @@ For a local model, the PIOS backend must be able to reach the endpoint. The Comp
 ## Use the V1
 
 1. Register a PIOS account.
-2. Create a note from **Quick capture** or the **Notes** workspace.
+2. Create a note from **Quick capture** or the **Notes** workspace. Inside a note, type `/` or use **Block** to add headings, lists, code, SQL, terminal commands, API examples, formulas, YouTube lectures or a drawing canvas.
 3. Upload a PDF/TXT/Markdown file or paste text via **Add to library**.
 4. Create learning objectives and track progress in **Learning**.
 5. Connect and test an AI provider under **AI providers**.
@@ -161,6 +161,8 @@ pios-v1-fullstack/
 
 ## Known limitations — not production-ready SaaS yet
 
+- The first structured-notes release stores the note body as sanitised HTML for backward compatibility. Canvas drawings are inserted as compressed image snapshots, not editable vector objects; advanced diagram layers, connectors, real-time collaboration, block-level history, nested databases, and rich formula rendering remain future work.
+
 - RAG retrieval is keyword-scored over note and extracted source text. The app stores chunks and has a pgvector column, but it does not yet generate embeddings or run semantic/hybrid vector retrieval.
 - Destination recommendations are local keyword heuristics. AI-assisted folder/page routing is not wired yet.
 - Only one default chat provider is used. Per-task model routing, dedicated embedding/vision models and usage/cost accounting are future work.
@@ -168,7 +170,7 @@ pios-v1-fullstack/
 - No OAuth integrations for Drive, Gmail, GitHub, Slack, Calendar or other external applications.
 - No desktop menu-bar/notch quick-capture companion; the current quick capture runs inside the PIOS browser tab.
 - No agent workflow execution, organisation multi-tenancy, collaboration, realtime sync, full concept graph extraction, advanced curriculum generation or spaced-repetition scheduler.
-- Scanned PDFs need OCR; OCR is not enabled. URL crawling and YouTube ingestion are not included.
+- Scanned PDFs need OCR; OCR is not enabled. URL crawling and YouTube ingestion are not included. YouTube videos can be embedded for playback in a note, but video transcripts/content are not ingested into PIOS knowledge yet.
 - The frontend currently stores the access token in browser localStorage. Before public deployment, move authentication to secure HttpOnly cookies and apply a reviewed CSRF strategy.
 - Add API rate limits, provider spend limits, robust SSRF/egress controls for custom model endpoints, account deletion/export, database and file backups, HTTPS, logging/monitoring, malware scanning and a security review before public/multi-tenant deployment.
 - This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The Spring Boot 3.5.16 line is the final OSS 3.5.x release; plan a tested move to a supported 4.x line before long-term production maintenance.

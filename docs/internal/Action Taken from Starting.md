@@ -749,6 +749,43 @@ If PIOS is ever changed to a public repository:
 - Move it to an access-controlled private location or remove it from the public source history through an appropriate repository-history procedure.
 - Do not assume deleting the file in a later commit removes it from previous public Git history.
 
+
+## 18. Structured notes editor and diagram canvas (November 4, 2026)
+
+### User need
+The original notes screen used a basic contentEditable area with a small formatting toolbar. The requested direction is closer to a Notion-style writing surface, with slash-insertable blocks, developer/student-specific note utilities, embedded lectures, and a drawing tool for architecture and learning diagrams.
+
+### Product and architecture decision
+Keep the existing `notes.body_html` persistence model for this milestone rather than introducing a block-JSON schema and migration. This preserves existing notes and the current API contract while allowing the editor to add more block types incrementally. The editor remains backed by the existing authenticated note endpoints and user-scoped database records.
+
+### Implemented in this change
+- Added a slash-command catalogue and a **Block** toolbar action. Typing `/` opens a filtered command list; arrow keys and Enter navigate/insert commands.
+- Added heading levels, paragraphs, bulleted and numbered lists, checklists, callout/quote blocks, dividers, code snippets, SQL snippets, terminal commands, HTTP/API examples, and LaTeX source blocks.
+- Added a YouTube lecture embed action. The editor accepts common YouTube watch, youtu.be, shorts, and embed links, then stores only a canonical youtube-nocookie embed URL.
+- Added a drawing modal with pen, line, arrow, rectangle, ellipse, eraser, colour selection, stroke width, undo and clear.
+- Inserted drawings are compressed JPEG snapshots stored inside the note body. The editor/backend reject unsupported image data URLs and enforce a 90 KB image bound.
+- Extended browser and server sanitisation for headings, code blocks, tables, YouTube iframes and safe raster-image snapshots. The server revalidates iframe host/path and image data before storage.
+- Added editor styling for code, media, callouts, tables, slash commands and the drawing canvas.
+
+### Files changed
+- `frontend/src/components/notes-workspace.tsx`
+- `frontend/src/components/note-drawing-modal.tsx` (new)
+- `frontend/src/lib/notes.ts`
+- `frontend/src/app/connected.css`
+- `backend/src/main/java/com/pios/data/PiosDataController.java`
+- `README.md`
+
+### Trade-offs and boundaries
+- HTML persistence is compatible with current notes but is less expressive than a structured block document model. A future migration should introduce typed block JSON, stable block IDs, ordering, and versioned migrations only after the interaction model is validated.
+- Drawing snapshots are easy to store and display but cannot be reopened as editable vector shapes. Advanced connector routing, layers, multi-select, diagram templates, and a full Excalidraw-like object model remain future work.
+- YouTube embed adds playback only. It does not download or transcribe lecture content, and the external player remains subject to YouTube availability and browser policy.
+- Code blocks are syntax-language-labelled editing areas; syntax highlighting and execution are not included. LaTeX is stored as source text and is not rendered by a math engine.
+- This establishes an extensible block catalogue, not an exhaustive professional tool library. More blocks for Java/Spring, databases, cloud, networking, AI/ML, mathematics, research and learning should be added based on focused user workflows rather than a large unvalidated list.
+
+### Verification status
+- Source-level checks confirm that the new editor component and sanitizer paths are present and that the GitHub changes are limited to the feature branch.
+- Docker/Maven/Next.js build, browser interactions, image-save round trip, YouTube rendering, and end-to-end note persistence have not been run in this environment. They must be tested locally before merging into `main`.
+
 ---
 
 **End of internal action and decision log.**

@@ -336,10 +336,16 @@ public class PiosDataController {
 
     private static final Safelist NOTE_HTML_SAFELIST = Safelist.none()
             .addTags("p", "br", "strong", "b", "em", "i", "u", "s", "strike", "ul", "ol", "li",
-                    "a", "h2", "h3", "blockquote", "hr", "input")
+                    "a", "h1", "h2", "h3", "blockquote", "hr", "input", "pre", "code", "iframe", "img",
+                    "table", "thead", "tbody", "tr", "th", "td")
             .addAttributes("a", "href")
             .addProtocols("a", "href", "http", "https", "mailto")
-            .addAttributes("input", "type", "checked", "disabled");
+            .addAttributes("input", "type", "checked", "disabled")
+            .addAttributes("pre", "data-language")
+            .addAttributes("iframe", "src", "title", "loading", "referrerpolicy", "allow", "allowfullscreen", "sandbox")
+            .addProtocols("iframe", "src", "https")
+            .addAttributes("img", "src", "alt")
+            .addProtocols("img", "src", "data");
 
     private String cleanHtml(String value) {
         if (value == null || value.isBlank()) return "";
@@ -354,6 +360,39 @@ public class PiosDataController {
                 input.attr("type", "checkbox");
                 input.attr("disabled", "disabled");
             }
+        }
+        for (Element iframe : document.select("iframe")) {
+            try {
+                java.net.URI uri = java.net.URI.create(iframe.attr("src"));
+                boolean trustedHost = "www.youtube-nocookie.com".equalsIgnoreCase(uri.getHost())
+                        || "www.youtube.com".equalsIgnoreCase(uri.getHost());
+                if (!"https".equalsIgnoreCase(uri.getScheme()) || !trustedHost
+                        || !uri.getPath().matches("/embed/[A-Za-z0-9_-]{11}")) {
+                    iframe.remove();
+                    continue;
+                }
+                iframe.attr("src", "https://www.youtube-nocookie.com" + uri.getPath());
+                iframe.attr("title", "YouTube video");
+                iframe.attr("loading", "lazy");
+                iframe.attr("referrerpolicy", "strict-origin-when-cross-origin");
+                iframe.attr("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share");
+                iframe.attr("allowfullscreen", "allowfullscreen");
+                iframe.attr("sandbox", "allow-scripts allow-same-origin allow-presentation");
+            } catch (RuntimeException ex) {
+                iframe.remove();
+            }
+        }
+        for (Element image : document.select("img")) {
+            String src = image.attr("src");
+            if (!src.matches("data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+") || src.length() > 90_000) {
+                image.remove();
+            } else {
+                image.attr("alt", image.attr("alt").substring(0, Math.min(160, image.attr("alt").length())));
+            }
+        }
+        for (Element pre : document.select("pre")) {
+            String language = pre.attr("data-language");
+            if (!language.isBlank() && !language.matches("(?i)[a-z0-9+#.-]{1,24}")) pre.removeAttr("data-language");
         }
         return document.body().html();
     }

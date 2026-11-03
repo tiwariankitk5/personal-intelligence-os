@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, MouseEvent } from "react";
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent } from "react";
 import { Icon } from "@/components/icon";
+import NoteDrawingModal from "@/components/note-drawing-modal";
 import type { NoteFolder, NoteColor, PiosNote } from "@/lib/notes";
 import { plainTextFromHtml, sanitizeNoteHtml, suggestNoteDestination } from "@/lib/notes";
 
@@ -14,6 +15,42 @@ type NotesWorkspaceProps = {
   onQuickCapture: () => void;
   onToast: (message: string) => void;
 };
+
+type NoteBlockCommand = { id: string; label: string; detail: string; keywords: string; html?: string; action?: "youtube" | "drawing" };
+
+const NOTE_BLOCK_COMMANDS: NoteBlockCommand[] = [
+  { id: "text", label: "Text", detail: "Start a plain paragraph", keywords: "paragraph p", html: "<p><br></p>" },
+  { id: "heading-1", label: "Heading 1", detail: "A large section heading", keywords: "title h1", html: "<h1>Heading</h1><p><br></p>" },
+  { id: "heading-2", label: "Heading 2", detail: "A section heading", keywords: "h2", html: "<h2>Heading</h2><p><br></p>" },
+  { id: "heading-3", label: "Heading 3", detail: "A smaller heading", keywords: "h3", html: "<h3>Heading</h3><p><br></p>" },
+  { id: "bullets", label: "Bulleted list", detail: "Unordered list", keywords: "list ul", html: "<ul><li>First item</li><li>Second item</li></ul><p><br></p>" },
+  { id: "numbered", label: "Numbered list", detail: "Ordered steps", keywords: "ordered ol steps", html: "<ol><li>First step</li><li>Second step</li></ol><p><br></p>" },
+  { id: "checklist", label: "Checklist", detail: "Tasks you can tick off", keywords: "todo task checkbox", html: '<ul><li><input type="checkbox" /> Task to complete</li></ul><p><br></p>' },
+  { id: "quote", label: "Callout / quote", detail: "Highlight an important idea", keywords: "blockquote callout note", html: "<blockquote><p>Important idea...</p></blockquote><p><br></p>" },
+  { id: "code", label: "Code block", detail: "JavaScript, Java, Python and more", keywords: "developer code programming", html: '<pre data-language="text"><code>Write or paste code here</code></pre><p><br></p>' },
+  { id: "sql", label: "SQL query", detail: "A dedicated SQL snippet", keywords: "database postgres mysql query", html: '<pre data-language="sql"><code>SELECT * FROM table_name;</code></pre><p><br></p>' },
+  { id: "terminal", label: "Terminal command", detail: "Shell and PowerShell commands", keywords: "bash shell powershell cli command", html: '<pre data-language="bash"><code></code></pre><p><br></p>' },
+  { id: "api", label: "API request", detail: "HTTP method, route, headers and body", keywords: "http rest endpoint api", html: '<pre data-language="http"><code>GET /api/v1/resource HTTP/1.1\nHost: localhost:8080</code></pre><p><br></p>' },
+  { id: "formula", label: "Math / formula", detail: "A space for LaTeX or a formula", keywords: "math latex equation calculus", html: '<pre data-language="latex"><code>\\( a^2 + b^2 = c^2 \\)</code></pre><p><br></p>' },
+  { id: "youtube", label: "YouTube lecture", detail: "Embed a lecture or explainer video", keywords: "video youtube embed lecture", action: "youtube" },
+  { id: "drawing", label: "Drawing canvas", detail: "Pen, shapes, connectors and arrows", keywords: "diagram excalidraw flowchart architecture canvas", action: "drawing" },
+  { id: "divider", label: "Divider", detail: "Separate sections of a note", keywords: "hr separator line", html: "<hr><p><br></p>" },
+];
+
+function youtubeEmbedUrl(input: string) {
+  try {
+    const url = new URL(input.trim());
+    let videoId = "";
+    if (url.hostname === "youtu.be" || url.hostname === "www.youtu.be") videoId = url.pathname.slice(1).split("/")[0];
+    else if (["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname)) {
+      if (url.pathname === "/watch") videoId = url.searchParams.get("v") ?? "";
+      else if (url.pathname.startsWith("/embed/") || url.pathname.startsWith("/shorts/")) videoId = url.pathname.split("/")[2] ?? "";
+    }
+    return /^[A-Za-z0-9_-]{11}$/.test(videoId) ? `https://www.youtube-nocookie.com/embed/${videoId}` : null;
+  } catch {
+    return null;
+  }
+}
 
 type QuickCaptureModalProps = {
   folders: NoteFolder[];
@@ -153,6 +190,10 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [folderDialog, setFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [showDestination, setShowDestination] = useState(false);
+  const [slashMenu, setSlashMenu] = useState<{ query: string } | null>(null);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [drawingOpen, setDrawingOpen] = useState(false);
+  const savedEditorRangeRef = useRef<Range | null>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
   const inboxFolderId = folders.find((folder) => folder.name.trim().toLowerCase() === "inbox")?.id ?? "inbox";
@@ -230,7 +271,102 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     document.execCommand("insertHTML", false, '<ul><li><input type="checkbox" /> New task</li></ul><p><br></p>');
     if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML));
   };
-  const handleEditorInput = () => { if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML)); };
+  const filteredBlockCommands = NOTE_BLOCK_COMMANDS.filter((command) =>
+    !slashMenu?.query || `${command.label} ${command.keywords} ${command.detail}`.toLowerCase().includes(slashMenu.query.toLowerCase())
+  );
+
+  const handleEditorInput = () => {
+    if (!editorRef.current) return;
+    setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML));
+    const selection = window.getSelection();
+    if (!selection?.rangeCount || !selection.isCollapsed) { setSlashMenu(null); return; }
+    const range = selection.getRangeAt(0);
+    const block = range.startContainer.nodeType === Node.TEXT_NODE
+      ? (range.startContainer.parentElement?.closest("p,div,h1,h2,h3,li,blockquote") ?? editorRef.current)
+      : ((range.startContainer as HTMLElement).closest?.("p,div,h1,h2,h3,li,blockquote") ?? editorRef.current);
+    try {
+      const beforeCaret = document.createRange();
+      beforeCaret.selectNodeContents(block);
+      beforeCaret.setEnd(range.startContainer, range.startOffset);
+      const match = beforeCaret.toString().match(new RegExp(String.fromCharCode(47) + "([a-z0-9-]*)$", "i"));
+      if (match) { setSlashMenu({ query: match[1] }); setSlashIndex(0); }
+      else setSlashMenu(null);
+    } catch {
+      setSlashMenu(null);
+    }
+  };
+
+  const insertHtmlAtCursor = (html: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const selection = window.getSelection();
+    if (selection && savedEditorRangeRef.current) {
+      selection.removeAllRanges();
+      selection.addRange(savedEditorRangeRef.current);
+    }
+    document.execCommand("insertHTML", false, html);
+    savedEditorRangeRef.current = null;
+    setSlashMenu(null);
+    setDraftHtml(sanitizeNoteHtml(editor.innerHTML));
+  };
+
+  const applyBlockCommand = (command: NoteBlockCommand) => {
+    const selection = window.getSelection();
+    if (selection?.rangeCount) {
+      const range = selection.getRangeAt(0);
+      const node = range.startContainer;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const textNode = node as Text;
+        const before = textNode.textContent?.slice(0, range.startOffset) ?? "";
+        const match = before.match(new RegExp(String.fromCharCode(47) + "([a-z0-9-]*)$", "i"));
+        if (match) {
+          range.setStart(textNode, range.startOffset - match[0].length);
+          range.deleteContents();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+      savedEditorRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
+    setSlashMenu(null);
+    if (command.action === "drawing") { setDrawingOpen(true); return; }
+    if (command.action === "youtube") {
+      const input = window.prompt("Paste a YouTube video or lecture URL");
+      if (!input) return;
+      const embedUrl = youtubeEmbedUrl(input);
+      if (!embedUrl) { onToast("That URL is not a supported YouTube video link."); return; }
+      insertHtmlAtCursor(`<p><iframe src="${embedUrl}" title="YouTube lecture" loading="lazy"></iframe></p><p><br></p>`);
+      return;
+    }
+    insertHtmlAtCursor(command.html ?? "<p><br></p>");
+    if (command.id === "code" || command.id === "sql" || command.id === "terminal" || command.id === "api" || command.id === "formula") {
+      const code = editorRef.current?.querySelector("pre:last-of-type code");
+      if (code) {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        range.collapse(false);
+        const selectionAfterInsert = window.getSelection();
+        selectionAfterInsert?.removeAllRanges();
+        selectionAfterInsert?.addRange(range);
+      }
+      editorRef.current?.focus();
+    }
+  };
+
+  const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!slashMenu) return;
+    if (event.key === "Escape") { event.preventDefault(); setSlashMenu(null); return; }
+    if (event.key === "ArrowDown" && filteredBlockCommands.length) { event.preventDefault(); setSlashIndex((index) => (index + 1) % filteredBlockCommands.length); return; }
+    if (event.key === "ArrowUp" && filteredBlockCommands.length) { event.preventDefault(); setSlashIndex((index) => (index - 1 + filteredBlockCommands.length) % filteredBlockCommands.length); return; }
+    if (event.key === "Enter" && filteredBlockCommands[slashIndex]) { event.preventDefault(); applyBlockCommand(filteredBlockCommands[slashIndex]); }
+  };
+
+  const insertDrawing = (dataUrl: string) => {
+    setDrawingOpen(false);
+    insertHtmlAtCursor(`<p><img src="${dataUrl}" alt="Note diagram" /></p><p><br></p>`);
+    onToast("Drawing inserted into your note.");
+  };
 
   const toggleArchive = () => { if (!selected) return; updateNote(selected.id, { archived: !selected.archived }); setSelectedId(null); onToast(selected.archived ? "Note restored." : "Note archived. You can find it under Archived."); };
   const togglePin = () => { if (!selected) return; updateNote(selected.id, { pinned: !selected.pinned }); onToast(selected.pinned ? "Note unpinned." : "Note pinned."); };
@@ -277,8 +413,18 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <button type="button" title="Numbered list" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("insertOrderedList")}><Icon name="list-ordered" size={15}/></button>
             <button type="button" title="Checklist" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={insertChecklist}><Icon name="list-checks" size={15}/></button>
             <button type="button" title="Add link" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { const url = window.prompt("Enter link URL"); if (url) format("createLink", url); }}><Icon name="link" size={15}/></button>
+            <i className="toolbar-divider"/>
+            <button type="button" title="Insert block (or type /)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { editorRef.current?.focus(); setSlashMenu({ query: "" }); setSlashIndex(0); }}><Icon name="plus-square" size={15}/><span className="note-toolbar-insert-label">Block</span></button>
           </div>
-          <div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} data-placeholder="Start writing..." />
+          {slashMenu && <div className="note-slash-menu" role="listbox" aria-label="Insert a note block">
+            <div className="note-slash-menu-heading"><strong>Insert a block</strong><kbd>↑ ↓ ENTER</kbd></div>
+            {filteredBlockCommands.length ? filteredBlockCommands.map((command, index) => <button type="button" role="option" aria-selected={slashIndex === index} key={command.id} className={slashIndex === index ? "active" : ""} onMouseDown={(event) => event.preventDefault()} onClick={() => applyBlockCommand(command)}>
+              <span className="note-slash-command-icon">{command.id === "drawing" ? "↗" : command.id === "youtube" ? "▶" : command.id === "code" || command.id === "sql" || command.id === "terminal" || command.id === "api" ? "</>" : command.id === "formula" ? "∑" : "¶"}</span>
+              <span><strong>{command.label}</strong><small>{command.detail}</small></span>
+              <kbd>/{command.id}</kbd>
+            </button>) : <p className="note-slash-empty">No matching block. Try a different command.</p>}
+          </div>}
+          <div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyDown={handleEditorKeyDown} data-placeholder="Start writing... Type / to insert a block." />
           <div className="note-editor-footer"><div className="note-color-picker">{colors.map((color) => <button key={color.id} type="button" title={color.name} aria-label={color.name} className={`note-color-dot ${color.id} ${draftColor === color.id ? "selected" : ""}`} onClick={() => setDraftColor(color.id)}/>)}</div><span>{plainTextFromHtml(draftHtml).trim().split(/\s+/).filter(Boolean).length} words</span><button className="button button-primary button-small" onClick={saveDraft}><Icon name="check" size={14}/>Save changes</button></div>
           <div className="note-routing-toggle"><button onClick={() => setShowDestination((value) => !value)}><Icon name="sparkles" size={14}/> Organise this note with PIOS <Icon name="chevron-down" size={13}/></button></div>
           {showDestination && <NoteDestination title={draftTitle} body={plainTextFromHtml(draftHtml)} folders={folders} notes={notes} folderId={currentFolderId} excludeId={selected.id} onFolderChange={(folderId) => updateNote(selected.id, { folderId })} onFoldersChange={onFoldersChange}/>}
@@ -286,6 +432,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       </> : <div className="note-editor-empty"><div><Icon name="sticky-note" size={27}/></div><h3>Select a note</h3><p>Choose a note from the list or create a new one to start writing.</p><button className="button button-primary button-small" onClick={onQuickCapture}><Icon name="plus" size={14}/>Create note</button></div>}
     </section>
 
+    {drawingOpen && <NoteDrawingModal onClose={() => setDrawingOpen(false)} onInsert={insertDrawing}/>}
     {folderDialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setFolderDialog(false); }}><form className="modal new-folder-modal" onSubmit={createFolder}><div className="modal-header"><div><div className="eyebrow">ORGANISE YOUR KNOWLEDGE</div><h2>Create a folder</h2><p>Folders keep related notes together.</p></div><button className="icon-button" type="button" onClick={() => setFolderDialog(false)}><Icon name="x"/></button></div><label htmlFor="folder-name">Folder name</label><input id="folder-name" autoFocus value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="e.g. Java Concurrency"/><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setFolderDialog(false)}>Cancel</button><button type="submit" className="button button-primary" disabled={!folderName.trim()}><Icon name="plus" size={14}/>Create folder</button></div></form></div>}
   </div>;
 }

@@ -86,8 +86,8 @@ export function plainTextFromHtml(html: string) {
 export function sanitizeNoteHtml(html: string) {
   if (typeof window === "undefined" || typeof DOMParser === "undefined") return "";
   const parsed = new DOMParser().parseFromString(html, "text/html");
-  const allowed = new Set(["P", "BR", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "UL", "OL", "LI", "A", "H2", "H3", "BLOCKQUOTE", "HR", "INPUT"]);
-  parsed.body.querySelectorAll("script,style,iframe,object,embed,svg,math").forEach((node) => node.remove());
+  const allowed = new Set(["P", "BR", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "UL", "OL", "LI", "A", "H1", "H2", "H3", "BLOCKQUOTE", "HR", "INPUT", "PRE", "CODE", "IFRAME", "IMG", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD"]);
+  parsed.body.querySelectorAll("script,style,object,embed,svg,math").forEach((node) => node.remove());
   parsed.body.querySelectorAll("*").forEach((node) => {
     if (!allowed.has(node.tagName)) {
       node.replaceWith(...Array.from(node.childNodes));
@@ -104,11 +104,33 @@ export function sanitizeNoteHtml(html: string) {
         node.setAttribute("type", "checkbox");
       } else if (node.tagName === "INPUT" && attribute.name === "checked") {
         node.setAttribute("checked", "");
+      } else if (node.tagName === "IFRAME" && attribute.name === "src") {
+        try {
+          const url = new URL(attribute.value);
+          const validHost = ["www.youtube-nocookie.com", "www.youtube.com"].includes(url.hostname);
+          if (url.protocol !== "https:" || !validHost || url.pathname.split("/")[1] !== "embed" || !/^[A-Za-z0-9_-]{11}$/.test(url.pathname.split("/")[2] ?? "") || url.pathname.split("/").length !== 3) node.removeAttribute("src");
+          else node.setAttribute("src", `https://www.youtube-nocookie.com${url.pathname}`);
+        } catch { node.removeAttribute("src"); }
+      } else if (node.tagName === "IMG" && attribute.name === "src") {
+        if (!(attribute.value.startsWith("data:image/png;base64,") || attribute.value.startsWith("data:image/jpeg;base64,") || attribute.value.startsWith("data:image/webp;base64,")) || !/^[A-Za-z0-9+/=]+$/.test(attribute.value.slice(attribute.value.indexOf(",") + 1)) || attribute.value.length > 90_000) node.removeAttribute("src");
+      } else if (node.tagName === "PRE" && attribute.name === "data-language") {
+        if (!/^[a-z0-9+#.-]{1,24}$/i.test(attribute.value)) node.removeAttribute("data-language");
+      } else if (node.tagName === "IMG" && attribute.name === "alt") {
+        node.setAttribute("alt", attribute.value.slice(0, 160));
       } else {
         node.removeAttribute(attribute.name);
       }
     });
     if (node.tagName === "INPUT" && node.getAttribute("type") !== "checkbox") node.remove();
+    if (node.tagName === "IFRAME") {
+      if (!node.getAttribute("src")) { node.remove(); return; }
+      node.setAttribute("title", "YouTube video");
+      node.setAttribute("loading", "lazy");
+      node.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      node.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share");
+      node.setAttribute("allowfullscreen", "");
+      node.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
+    }
   });
   return parsed.body.innerHTML;
 }
