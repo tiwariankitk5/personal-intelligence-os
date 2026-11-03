@@ -372,12 +372,18 @@ public class ChatGptPlanService {
             form.add("token", encryption.decrypt(connection.encryptedRefreshToken()));
             form.add("token_type_hint", "refresh_token");
             form.add("client_id", connection.clientId());
-            try {
-                http.post().uri(REVOCATION_ENDPOINT).contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .body(form).retrieve().toBodilessEntity();
-                remoteRevocationConfirmed = true;
-            } catch (Exception ignored) {
-                // Local tokens are still deleted. The UI tells the user when remote revocation was not confirmed.
+            for (int attempt = 0; attempt < 3 && !remoteRevocationConfirmed; attempt++) {
+                try {
+                    http.post().uri(REVOCATION_ENDPOINT).contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                            .body(form).retrieve().toBodilessEntity();
+                    remoteRevocationConfirmed = true;
+                } catch (RestClientResponseException ex) {
+                    if (!(ex.getStatusCode().is5xxServerError() || ex.getStatusCode().value() == 429) || attempt == 2) break;
+                    pauseBeforeRevokeRetry(attempt);
+                } catch (org.springframework.web.client.ResourceAccessException ex) {
+                    if (attempt == 2) break;
+                    pauseBeforeRevokeRetry(attempt);
+                }
             }
         }
         Boolean wasDefault = jdbc.query("""
@@ -439,7 +445,9 @@ public class ChatGptPlanService {
                         .body(form).retrieve().body(JsonNode.class);
             } catch (RestClientResponseException ex) {
                 if (ex.getStatusCode().value() == 400 || ex.getStatusCode().value() == 401) {
-                    throw new AiProviderException("The ChatGPT connection expired or was revoked. Reconnect your account in AI providers.");
+                    jdbc.update("DELETE FROM ai_chatgpt_connections WHERE user_id=?", userId);
+                    removeChatGptProvider(userId);
+                    throw new AiProviderException("The ChatGPT refresh token was rejected or revoked. Local credentials were cleared; reconnect your ChatGPT account in AI providers.");
                 }
                 throw providerFailure(ex);
             }
@@ -563,6 +571,14 @@ public class ChatGptPlanService {
                     UPDATE ai_provider_connections SET is_default=true
                     WHERE id=(SELECT id FROM ai_provider_connections WHERE user_id=? ORDER BY created_at DESC LIMIT 1)
                     """, userId);
+        }
+    }
+
+    private void pauseBeforeRevokeRetry(int attempt) {
+        try {
+            Thread.sleep(250L * (1L << attempt));
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
         }
     }
 
