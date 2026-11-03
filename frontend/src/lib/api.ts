@@ -14,7 +14,7 @@ export type ApiSource = {
   sourceUrl?: string; byteSize: number; updatedAt: string;
 };
 export type ApiProvider = {
-  id: string; displayName: string; providerType: "OPENAI_COMPATIBLE" | "ANTHROPIC" | "GEMINI";
+  id: string; displayName: string; providerType: "OPENAI_COMPATIBLE" | "ANTHROPIC" | "GEMINI" | "CHATGPT_PLAN";
   modelName: string; baseUrl?: string; hasApiKey: boolean; isDefault: boolean; createdAt: string;
 };
 export type ApiObjective = {
@@ -110,3 +110,27 @@ export async function uploadSource(file: File, collection = "Inbox") {
 }
 export const createTextSource = (title: string, content: string, collection = "Inbox") =>
   apiRequest<ApiSource>("/sources/text", { method: "POST", body: JSON.stringify({ title, content, collection }) });
+
+
+export type ApiChatGptConnection = {
+  connected: boolean;
+  planUsageEnabled: boolean;
+  email?: string | null;
+  displayName?: string | null;
+  connectedAt?: string | null;
+  selectedModel?: string | null;
+  manageUsageUrl?: string | null;
+};
+export type ApiChatGptModel = { slug: string; displayName: string };
+export type ApiChatGptConnectStart = { launchUrl: string; redirectUri: string };
+export const startChatGptConnect = () =>
+  apiRequest<ApiChatGptConnectStart>("/ai/chatgpt/connect", { method: "POST", body: JSON.stringify({}) });
+export const getChatGptConnection = () => apiRequest<ApiChatGptConnection>("/ai/chatgpt/connection");
+export const confirmChatGptConnect = (state: string) =>
+  apiRequest<ApiChatGptConnection>("/ai/chatgpt/confirm", { method: "POST", body: JSON.stringify({ state }) });
+
+export const getChatGptModels = () => apiRequest<ApiChatGptModel[]>("/ai/chatgpt/models");
+export const activateChatGptModel = (modelName: string, makeDefault = true) =>
+  apiRequest<void>("/ai/chatgpt/model", { method: "POST", body: JSON.stringify({ modelName, makeDefault }) });
+export const disconnectChatGpt = () =>
+  apiRequest<{ remoteRevocationConfirmed: boolean }>("/ai/chatgpt/connection", { method: "DELETE" });

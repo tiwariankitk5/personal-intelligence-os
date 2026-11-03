@@ -35,12 +35,15 @@ public class PiosAiController {
     private final SecretEncryptionService encryption;
     private final AiGatewayService gateway;
     private final ObjectMapper mapper;
+    private final ChatGptPlanService chatGptPlan;
 
-    public PiosAiController(JdbcTemplate jdbc, SecretEncryptionService encryption, AiGatewayService gateway, ObjectMapper mapper) {
+    public PiosAiController(JdbcTemplate jdbc, SecretEncryptionService encryption, AiGatewayService gateway,
+                            ObjectMapper mapper, ChatGptPlanService chatGptPlan) {
         this.jdbc = jdbc;
         this.encryption = encryption;
         this.gateway = gateway;
         this.mapper = mapper;
+        this.chatGptPlan = chatGptPlan;
     }
 
     @GetMapping("/providers")
@@ -106,7 +109,10 @@ public class PiosAiController {
     @PostMapping("/providers/{id}/test")
     public TestResponse testProvider(@PathVariable UUID id) {
         ProviderRow row = providerRow(id, currentUserId());
-        String answer = gateway.complete(row.config(), "You are a connectivity test. Reply with exactly OK.", "Reply with exactly OK.");
+        String answer = "CHATGPT_PLAN".equals(row.config().providerType())
+                ? chatGptPlan.complete(currentUserId(), row.config().modelName(),
+                        "You are a connectivity test. Reply with exactly OK.", "Reply with exactly OK.")
+                : gateway.complete(row.config(), "You are a connectivity test. Reply with exactly OK.", "Reply with exactly OK.");
         return new TestResponse(true, "Provider returned a response.", answer.trim());
     }
 
@@ -137,7 +143,9 @@ public class PiosAiController {
         String prompt = buildPrompt(request.question(), context);
         jdbc.update("INSERT INTO ai_messages(id,conversation_id,user_id,role,content,citations) VALUES (?,?,?,?,?,?::jsonb)",
                 UUID.randomUUID(), conversationId, userId, "user", request.question().trim(), "[]");
-        String answer = gateway.complete(provider.config(), systemPrompt, prompt);
+        String answer = "CHATGPT_PLAN".equals(provider.config().providerType())
+                ? chatGptPlan.complete(userId, provider.config().modelName(), systemPrompt, prompt)
+                : gateway.complete(provider.config(), systemPrompt, prompt);
         String citationsJson = json(context.stream().map(item -> new Citation(item.id(), item.title(), item.type())).toList());
         jdbc.update("INSERT INTO ai_messages(id,conversation_id,user_id,role,content,citations) VALUES (?,?,?,?,?,?::jsonb)",
                 UUID.randomUUID(), conversationId, userId, "assistant", answer, citationsJson);

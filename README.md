@@ -13,6 +13,7 @@ This is a **runnable V1 foundation**, not the complete long-term PIOS vision or 
 - Upload PDF, TXT, Markdown and paste text as knowledge sources. Text is extracted, stored in PostgreSQL and chunked. Uploaded originals are stored in a Docker volume. Text-based PDFs are supported; scanned PDFs require OCR and are not yet supported.
 - Search stored source titles and text.
 - Connect cloud AI with a provider API key, or connect a compatible local model server. V1 includes OpenAI-compatible endpoints (including OpenAI, OpenRouter, Groq, DeepSeek, Mistral and compatible gateways), Anthropic Messages API, and Google Gemini API.
+- Experimental local **Sign in with ChatGPT** flow: OpenAI OAuth with state/nonce/PKCE, user-confirmed account linking, encrypted local token storage, model discovery, refresh/revocation, and ChatGPT-plan-backed Responses API routing. This remains subject to OpenAI eligibility and has not yet been runtime-tested on the user's machine.
 - Provider keys are encrypted at rest with AES-256-GCM. They are never returned to the browser after saving.
 - Test a provider, choose a default provider, and use Ask PIOS. Relevant account-owned notes and sources are selected with keyword scoring, sent to the selected provider, and returned with source metadata citations.
 - Create learning objectives and update progress.
@@ -74,6 +75,26 @@ docker compose logs -f db backend frontend
 
 You can also double-click `scripts\start-pios.cmd` to launch the same Windows setup script without changing your PowerShell execution policy.
 
+## Connect your ChatGPT plan (local self-hosted mode)
+
+Under **AI providers**, select **Continue with ChatGPT**. PIOS opens the OpenAI sign-in page in a separate browser window. Sign in with the ChatGPT account you want to use and review the separate permission to use your ChatGPT plan. PIOS does not ask for your ChatGPT password, session cookie or API key.
+
+This integration follows OpenAI's **Sign in with ChatGPT / ChatGPT plan usage for open-source and locally hosted apps** flow. It is intended for this self-hosted PIOS runtime running on a device or VM you control. Do not expose the callback/API publicly or proxy these user tokens through a PIOS-managed hosted service. A future commercial hosted PIOS deployment needs separate OpenAI approval before offering ChatGPT plan usage.
+
+- The OAuth callback is bound to `http://127.0.0.1:8080/auth/callback`. OpenAI requires the HTTP loopback host `127.0.0.1` and exact path `/auth/callback`; the port may vary. The supplied Compose file binds the backend port to `127.0.0.1` only.
+- The browser receives a one-time local launch URL, not the OpenAI authorization URL or an ID-token hint. The local backend redirects to OpenAI. The OpenAI callback stores a short-lived pending credential set; the original PIOS tab confirms it using its signed-in PIOS session before the connection is activated.
+- OAuth state, nonce, PKCE verifier and launch token are one-time and time-limited. The issued OpenAI client ID and stable `ext_agent_host_id` are retained for reauthorisation.
+- Access, refresh and ID tokens are encrypted with the local `PIOS_ENCRYPTION_KEY` in the local PostgreSQL volume. They are never returned to browser JavaScript or written to application logs. OAuth callback and redirect responses use no-store and no-referrer headers.
+- Plan inference uses `POST https://api.openai.com/v1/responses` with `store: false` and `stream: true`. PIOS accepts a response only after `response.completed`.
+- Both `chatgpt.tokens.use.direct` and `resource.invoke` must be granted for plan inference. Identity sign-in alone is not enough. A declined permission keeps the identity connection but does not enable inference.
+- Model choices are retrieved from the connected ChatGPT account. Use **Use for Ask PIOS** to make the selected ChatGPT model the default provider.
+- PIOS V1 supports one ChatGPT registration per PIOS user. Multiple saved ChatGPT accounts and account switching are future work.
+- Users can inspect app-level consumption and limits in [ChatGPT Settings → Usage](https://chatgpt.com/settings/usage). Disconnecting in PIOS attempts remote refresh-token revocation and always removes local tokens; if remote revocation could not be confirmed, revoke PIOS in ChatGPT Settings → Security and login.
+
+**Eligibility caveat:** OpenAI documents this flow for open-source/local apps and selected private clients. This PIOS repository is currently private and is not yet an approved private client; therefore OpenAI may deny registration or plan-usage admission until the app meets its eligibility requirements or is selected by OpenAI. The implementation does not bypass that requirement. Do not make the repository public solely to obtain access without reviewing OpenAI's requirements and choosing an appropriate open-source licence. A commercial hosted PIOS deployment needs a separate approval path.
+
+ChatGPT plan use is subject to account/workspace eligibility, regional availability and the user's own ChatGPT limits. It does not share ChatGPT conversations or memory and does not create API billing access. The existing API-key and local-model options remain available.
+
 ## Connect an AI provider
 
 Open **AI providers → Add connection**.
@@ -110,6 +131,7 @@ Base URL: `http://localhost:8080/api/v1`
 | Knowledge sources | `GET /sources`, `POST /sources/upload`, `POST /sources/text`, `DELETE /sources/{id}` |
 | AI providers | `GET/POST /ai/providers`, `PUT /ai/providers/{id}/default`, `POST /ai/providers/{id}/test`, `DELETE /ai/providers/{id}` |
 | AI chat | `POST /ai/chat`, `GET /ai/conversations`, `GET /ai/conversations/{id}/messages` |
+| ChatGPT plan connection | `POST /ai/chatgpt/connect`, `GET /ai/chatgpt/connection`, `POST /ai/chatgpt/confirm`, `GET /ai/chatgpt/models`, `POST /ai/chatgpt/model`, `DELETE /ai/chatgpt/connection` |
 | Learning | `GET/POST /learning/objectives`, `PATCH/DELETE /learning/objectives/{id}` |
 
 Except registration/login and the health endpoint, API requests require `Authorization: Bearer <accessToken>`.

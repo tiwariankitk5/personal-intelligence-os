@@ -66,6 +66,11 @@ public class GlobalExceptionHandler {
         return response(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(com.pios.ai.ChatGptPlanService.AiProviderException.class)
+    public ResponseEntity<ApiError> handleChatGptProvider(com.pios.ai.ChatGptPlanService.AiProviderException ex, HttpServletRequest request) {
+        return response(HttpStatus.BAD_GATEWAY, ex.getMessage(), request, Map.of());
+    }
+
     private ResponseEntity<ApiError> response(HttpStatus status, String message, HttpServletRequest request,
                                                Map<String, String> validationErrors) {
         ApiError body = new ApiError(Instant.now(), status.value(), status.getReasonPhrase(), message,
