@@ -8,7 +8,7 @@ This is a **runnable V1 foundation**, not the complete long-term PIOS vision or 
 
 - Register and sign in with email/password; passwords are BCrypt-hashed and API access uses signed JWTs.
 - User-scoped workspace data: folders, notes, sources, learning objectives, AI provider connections and chat conversations.
-- Persistent Notion-style note editor with rich-text headings, lists and checklists, slash-command block insertion, Java/SQL/terminal/HTTP/LaTeX code snippets, safe YouTube embeds, and an in-note drawing canvas with pen, line, arrow, rectangle, ellipse, eraser and undo. Notes are stored in PostgreSQL, not browser-only local storage.
+- Persistent Notion-style note editor with rich-text headings, lists and checklists, slash-command block insertion, Java/Python/SQL/JSON/Git/terminal/HTTP/LaTeX starter snippets, comparison tables and study flashcards, safe YouTube embeds, and an in-note drawing canvas with pen, line, arrow, rectangle, ellipse, eraser and undo. Notes are stored in PostgreSQL, not browser-only local storage.
 - Destination suggestions for quick capture using local keyword matching. Users can choose a folder, create a folder, append to a similar existing page or create a separate note. The current suggestion logic is heuristic, not an autonomous AI agent.
 - Upload PDF, TXT, Markdown and paste text as knowledge sources. Text is extracted, stored in PostgreSQL and chunked. Uploaded originals are stored in a Docker volume. Text-based PDFs are supported; scanned PDFs require OCR and are not yet supported.
 - Search stored source titles and text.

@@ -31,6 +31,12 @@ const NOTE_BLOCK_COMMANDS: NoteBlockCommand[] = [
   { id: "sql", label: "SQL query", detail: "A dedicated SQL snippet", keywords: "database postgres mysql query", html: '<pre data-language="sql"><code>SELECT * FROM table_name;</code></pre><p><br></p>' },
   { id: "terminal", label: "Terminal command", detail: "Shell and PowerShell commands", keywords: "bash shell powershell cli command", html: '<pre data-language="bash"><code></code></pre><p><br></p>' },
   { id: "api", label: "API request", detail: "HTTP method, route, headers and body", keywords: "http rest endpoint api", html: '<pre data-language="http"><code>GET /api/v1/resource HTTP/1.1\nHost: localhost:8080</code></pre><p><br></p>' },
+  { id: "java", label: "Java starter", detail: "A minimal Java class with main method", keywords: "java class object spring backend", html: '<pre data-language="java"><code>public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, PIOS");\n    }\n}</code></pre><p><br></p>' },
+  { id: "python", label: "Python starter", detail: "A function and entry point", keywords: "python script function ml data science", html: '<pre data-language="python"><code>def main():\n    print("Hello, PIOS")\n\nif __name__ == "__main__":\n    main()</code></pre><p><br></p>' },
+  { id: "json", label: "JSON payload", detail: "A sample request or response object", keywords: "json data api payload object", html: '<pre data-language="json"><code>{\n  "name": "PIOS",\n  "status": "draft"\n}</code></pre><p><br></p>' },
+  { id: "git", label: "Git workflow", detail: "A small version-control command sequence", keywords: "git github version control commit", html: '<pre data-language="bash"><code>git status\ngit add .\ngit commit -m "Describe the change"</code></pre><p><br></p>' },
+  { id: "table", label: "Table", detail: "Compare concepts, options or results", keywords: "grid rows columns comparison matrix", html: "<table><thead><tr><th>Topic</th><th>Notes</th></tr></thead><tbody><tr><td>Item 1</td><td>Details</td></tr><tr><td>Item 2</td><td>Details</td></tr></tbody></table><p><br></p>" },
+  { id: "flashcard", label: "Study flashcard", detail: "Question and answer for active recall", keywords: "study revision memory question answer flash card", html: "<blockquote><p><strong>Question:</strong> Write the prompt here.</p><p><strong>Answer:</strong> Write the answer here.</p></blockquote><p><br></p>" },
   { id: "formula", label: "Math / formula", detail: "A space for LaTeX or a formula", keywords: "math latex equation calculus", html: '<pre data-language="latex"><code>\\( a^2 + b^2 = c^2 \\)</code></pre><p><br></p>' },
   { id: "youtube", label: "YouTube lecture", detail: "Embed a lecture or explainer video", keywords: "video youtube embed lecture", action: "youtube" },
   { id: "drawing", label: "Drawing canvas", detail: "Pen, shapes, connectors and arrows", keywords: "diagram excalidraw flowchart architecture canvas", action: "drawing" },
@@ -340,7 +346,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       return;
     }
     insertHtmlAtCursor(command.html ?? "<p><br></p>");
-    if (command.id === "code" || command.id === "sql" || command.id === "terminal" || command.id === "api" || command.id === "formula") {
+    if (command.html?.includes("<pre")) {
       const code = editorRef.current?.querySelector("pre:last-of-type code");
       if (code) {
         const range = document.createRange();
@@ -364,6 +370,10 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
 
   const insertDrawing = (dataUrl: string) => {
     setDrawingOpen(false);
+    if (draftHtml.length + dataUrl.length + 100 > 99_000) {
+      onToast("This note is close to its size limit. Save or move some content before inserting a drawing.");
+      return;
+    }
     insertHtmlAtCursor(`<p><img src="${dataUrl}" alt="Note diagram" /></p><p><br></p>`);
     onToast("Drawing inserted into your note.");
   };

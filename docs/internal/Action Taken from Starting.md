@@ -760,7 +760,7 @@ Keep the existing `notes.body_html` persistence model for this milestone rather 
 
 ### Implemented in this change
 - Added a slash-command catalogue and a **Block** toolbar action. Typing `/` opens a filtered command list; arrow keys and Enter navigate/insert commands.
-- Added heading levels, paragraphs, bulleted and numbered lists, checklists, callout/quote blocks, dividers, code snippets, SQL snippets, terminal commands, HTTP/API examples, and LaTeX source blocks.
+- Added heading levels, paragraphs, bulleted and numbered lists, checklists, callout/quote blocks, dividers, Java/Python/SQL/JSON/Git starter snippets, terminal commands, HTTP/API examples, LaTeX source blocks, comparison tables and study flashcards.
 - Added a YouTube lecture embed action. The editor accepts common YouTube watch, youtu.be, shorts, and embed links, then stores only a canonical youtube-nocookie embed URL.
 - Added a drawing modal with pen, line, arrow, rectangle, ellipse, eraser, colour selection, stroke width, undo and clear.
 - Inserted drawings are compressed JPEG snapshots stored inside the note body. The editor/backend reject unsupported image data URLs and enforce a 90 KB image bound.
