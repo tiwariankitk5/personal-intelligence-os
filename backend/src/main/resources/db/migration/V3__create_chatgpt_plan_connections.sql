@@ -8,6 +8,7 @@ CREATE TABLE ai_chatgpt_registrations (
     user_id UUID PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
     client_id VARCHAR(180) NOT NULL,
     ext_agent_host_id VARCHAR(180) NOT NULL,
+    openai_subject VARCHAR(240) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uk_ai_chatgpt_registration_client UNIQUE (client_id)

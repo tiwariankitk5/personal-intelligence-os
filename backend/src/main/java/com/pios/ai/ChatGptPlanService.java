@@ -207,6 +207,10 @@ public class ChatGptPlanService {
             String idToken = tokens.path("id_token").asText();
             Jwt identity = verifyIdentity(idToken, clientId, attempt.nonce());
             String subject = identity.getSubject();
+            if (savedRegistration != null && savedRegistration.subject() != null
+                    && !savedRegistration.subject().equals(subject)) {
+                return callbackPage(false, "This ChatGPT identity does not match the account registered with this PIOS client. Disconnect or use a separate PIOS account to connect another identity.");
+            }
             Connection priorConnection = connection(attempt.userId());
             if (priorConnection != null && (!priorConnection.clientId().equals(clientId)
                     || !priorConnection.subject().equals(subject))) {
@@ -273,7 +277,8 @@ public class ChatGptPlanService {
         }
         PendingConnection account = pending.get(0);
         Registration savedRegistration = registration(userId);
-        if (savedRegistration != null && !savedRegistration.clientId().equals(account.clientId())) {
+        if (savedRegistration != null && (!savedRegistration.clientId().equals(account.clientId())
+                || (savedRegistration.subject() != null && !savedRegistration.subject().equals(account.subject())))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This ChatGPT account does not match the saved PIOS registration.");
         }
         Connection priorConnection = connection(userId);
@@ -284,9 +289,9 @@ public class ChatGptPlanService {
 
         if (savedRegistration == null) {
             jdbc.update("""
-                    INSERT INTO ai_chatgpt_registrations(user_id,client_id,ext_agent_host_id,created_at,updated_at)
-                    VALUES (?,?,?,?,now())
-                    """, userId, account.clientId(), hostId(), Instant.now());
+                    INSERT INTO ai_chatgpt_registrations(user_id,client_id,ext_agent_host_id,openai_subject,created_at,updated_at)
+                    VALUES (?,?,?,?,?,now())
+                    """, userId, account.clientId(), hostId(), account.subject(), Instant.now());
         }
         jdbc.update("""
                 INSERT INTO ai_chatgpt_connections
@@ -583,8 +588,8 @@ public class ChatGptPlanService {
     }
 
     private Registration registration(UUID userId) {
-        return jdbc.query("SELECT client_id,ext_agent_host_id FROM ai_chatgpt_registrations WHERE user_id=?",
-                rs -> rs.next() ? new Registration(rs.getString("client_id"), rs.getString("ext_agent_host_id")) : null, userId);
+        return jdbc.query("SELECT client_id,ext_agent_host_id,openai_subject FROM ai_chatgpt_registrations WHERE user_id=?",
+                rs -> rs.next() ? new Registration(rs.getString("client_id"), rs.getString("ext_agent_host_id"), rs.getString("openai_subject")) : null, userId);
     }
 
     private Connection connection(UUID userId) {
@@ -684,7 +689,7 @@ public class ChatGptPlanService {
                                    Instant connectedAt, String selectedModel, String manageUsageUrl) { }
     public record ChatGptModel(String slug, String displayName) { }
     public record DisconnectResult(boolean remoteRevocationConfirmed) { }
-    private record Registration(String clientId, String hostId) { }
+    private record Registration(String clientId, String hostId, String subject) { }
     private record PendingConnection(String clientId, String subject, String email, String displayName, String pictureUrl,
                                      String encryptedIdToken, String encryptedAccessToken, String encryptedRefreshToken,
                                      String grantedScopes, boolean planUsageEnabled, Instant tokenExpiresAt) { }
