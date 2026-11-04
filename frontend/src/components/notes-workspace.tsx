@@ -202,6 +202,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const editorPaneRef = useRef<HTMLElement>(null);
   const drawingSceneExporterRef = useRef<(() => Promise<ExportedNoteDiagram>) | null>(null);
   const editorCursorRangeRef = useRef<Range | null>(null);
+  const restoreCaretAfterDiagramIdRef = useRef<string | null>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
   const diagramStore = readDiagramStore(inkData);
@@ -230,7 +231,25 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       setDraftTitle(""); setDraftHtml(""); return;
     }
     setDraftTitle(selected.title); setDraftHtml(selected.bodyHtml); setDraftColor(selected.color); setInkData(selected.inkData ?? ""); setCoverUrl(selected.coverUrl ?? "");
-    if (editorRef.current) editorRef.current.innerHTML = sanitizeNoteHtml(selected.bodyHtml);
+    if (editorRef.current) {
+      editorRef.current.innerHTML = sanitizeNoteHtml(selected.bodyHtml);
+      const diagramId = restoreCaretAfterDiagramIdRef.current;
+      if (diagramId) {
+        const insertedImage = editorRef.current.querySelector(`img[data-pios-diagram-id="${diagramId}"]`);
+        if (insertedImage) {
+          const lineBreak = insertedImage.nextSibling;
+          const range = document.createRange();
+          if (lineBreak && lineBreak.nodeName === "BR") range.setStartAfter(lineBreak);
+          else range.setStartAfter(insertedImage);
+          range.collapse(true);
+          editorRef.current.focus();
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+        restoreCaretAfterDiagramIdRef.current = null;
+      }
+    }
   }, [selectedId, selected?.bodyHtml, selected?.title, selected?.color]);
 
   const visibleNotes = useMemo(() => {
@@ -311,6 +330,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
         image.src = exported.previewDataUrl;
         image.alt = "Editable diagram — double-click to modify";
       } else {
+        restoreCaretAfterDiagramIdRef.current = diagramId;
         image = document.createElement("img");
         image.src = exported.previewDataUrl;
         image.alt = "Editable diagram — double-click to modify";
