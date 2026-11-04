@@ -1,19 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import type { FormEvent, MouseEvent } from "react";
 import { Icon } from "@/components/icon";
 import type { NoteFolder, NoteColor, PiosNote } from "@/lib/notes";
 import { plainTextFromHtml, sanitizeNoteHtml, suggestNoteDestination } from "@/lib/notes";
+import { sendChat } from "@/lib/api";
 
 type NotesWorkspaceProps = {
   notes: PiosNote[];
   folders: NoteFolder[];
-  onNotesChange: (notes: PiosNote[]) => void;
+  onNotesChange: (notes: PiosNote[]) => void | Promise<void>;
   onFoldersChange: (folders: NoteFolder[]) => void;
   onQuickCapture: () => void;
   onToast: (message: string) => void;
 };
+
+const NoteDrawingCanvas = dynamic(() => import("@/components/note-drawing-canvas"), {
+  ssr: false,
+  loading: () => <div className="pios-excalidraw-loading">Loading drawing canvas…</div>,
+});
 
 type QuickCaptureModalProps = {
   folders: NoteFolder[];
@@ -26,6 +33,28 @@ const colors: { id: NoteColor; name: string }[] = [
   { id: "sage", name: "Sage" }, { id: "butter", name: "Butter" }, { id: "lavender", name: "Lavender" },
   { id: "sky", name: "Sky" }, { id: "rose", name: "Rose" }, { id: "slate", name: "Slate" },
 ];
+
+type NoteDiagramRecord = { id: string; sceneData: string };
+type NoteDiagramStore = { format: "pios-diagrams-v1"; diagrams: NoteDiagramRecord[]; legacyScene?: string };
+type ExportedNoteDiagram = { sceneData: string; previewDataUrl: string };
+
+function readDiagramStore(raw: string): NoteDiagramStore {
+  if (!raw) return { format: "pios-diagrams-v1", diagrams: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.format === "pios-diagrams-v1" && Array.isArray(parsed.diagrams)) {
+      return { format: "pios-diagrams-v1", diagrams: parsed.diagrams.filter((item: unknown): item is NoteDiagramRecord =>
+        !!item && typeof item === "object" && typeof (item as NoteDiagramRecord).id === "string" && typeof (item as NoteDiagramRecord).sceneData === "string"
+      ) };
+    }
+    if (parsed?.format === "pios-excalidraw-v1" && Array.isArray(parsed.elements)) {
+      return { format: "pios-diagrams-v1", diagrams: [], legacyScene: raw };
+    }
+  } catch {
+    // Ignore malformed legacy drawing data and preserve it only until a replacement is saved.
+  }
+  return { format: "pios-diagrams-v1", diagrams: [] };
+}
 
 function makeNote(title: string, body: string, folderId: string, color: NoteColor = "sage"): PiosNote {
   const html = body.trim().split(/\n/).map((line) => line.trim() ? `<p>${escapeHtml(line)}</p>` : "<p><br></p>").join("");
@@ -153,8 +182,31 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [folderDialog, setFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [showDestination, setShowDestination] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [drawingOpen, setDrawingOpen] = useState(false);
+  const [drawingSaving, setDrawingSaving] = useState(false);
+  const [drawingInitialData, setDrawingInitialData] = useState("");
+  const [editingDiagramId, setEditingDiagramId] = useState<string | null>(null);
+  const [askText, setAskText] = useState("");
+  const [askAnswer, setAskAnswer] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askConversationId, setAskConversationId] = useState<string | undefined>();
+  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
+  const [toolbarDragging, setToolbarDragging] = useState(false);
+  const [inkData, setInkData] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const editorPaneRef = useRef<HTMLElement>(null);
+  const drawingSceneExporterRef = useRef<(() => Promise<ExportedNoteDiagram>) | null>(null);
+  const editorCursorRangeRef = useRef<Range | null>(null);
+  const restoreCaretAfterDiagramIdRef = useRef<string | null>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
+  const diagramStore = readDiagramStore(inkData);
+  const savedDiagramCount = diagramStore.diagrams.length + (diagramStore.legacyScene ? 1 : 0);
   const inboxFolderId = folders.find((folder) => folder.name.trim().toLowerCase() === "inbox")?.id ?? "inbox";
   useEffect(() => {
     const handleNotesShortcuts = (event: KeyboardEvent) => {
@@ -178,8 +230,26 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     if (!selected) {
       setDraftTitle(""); setDraftHtml(""); return;
     }
-    setDraftTitle(selected.title); setDraftHtml(selected.bodyHtml); setDraftColor(selected.color);
-    if (editorRef.current) editorRef.current.innerHTML = sanitizeNoteHtml(selected.bodyHtml);
+    setDraftTitle(selected.title); setDraftHtml(selected.bodyHtml); setDraftColor(selected.color); setInkData(selected.inkData ?? ""); setCoverUrl(selected.coverUrl ?? "");
+    if (editorRef.current) {
+      editorRef.current.innerHTML = sanitizeNoteHtml(selected.bodyHtml);
+      const diagramId = restoreCaretAfterDiagramIdRef.current;
+      if (diagramId) {
+        const insertedImage = editorRef.current.querySelector(`img[data-pios-diagram-id="${diagramId}"]`);
+        if (insertedImage) {
+          const lineBreak = insertedImage.nextSibling;
+          const range = document.createRange();
+          if (lineBreak && lineBreak.nodeName === "BR") range.setStartAfter(lineBreak);
+          else range.setStartAfter(insertedImage);
+          range.collapse(true);
+          editorRef.current.focus();
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+        restoreCaretAfterDiagramIdRef.current = null;
+      }
+    }
   }, [selectedId, selected?.bodyHtml, selected?.title, selected?.color]);
 
   const visibleNotes = useMemo(() => {
@@ -199,9 +269,136 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const updateNote = (id: string, patch: Partial<PiosNote>) => onNotesChange(notes.map((note) => note.id === id ? { ...note, ...patch } : note));
   const saveDraft = () => {
     if (!selected) return;
-    const body = plainTextFromHtml(draftHtml);
-    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: draftHtml, plainText: body, color: draftColor, updatedAt: "Just now", order: Date.now() });
+    const html = editorRef.current ? sanitizeNoteHtml(editorRef.current.innerHTML) : draftHtml;
+    const body = plainTextFromHtml(html);
+    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: html, plainText: body, color: draftColor, inkData, coverUrl, updatedAt: "Just now", order: Date.now() });
+    setDraftHtml(html);
     onToast("Note saved to your PIOS account.");
+  };
+  const rememberEditorCursor = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) editorCursorRangeRef.current = range.cloneRange();
+  };
+  const openNewDiagram = () => {
+    rememberEditorCursor();
+    const store = readDiagramStore(inkData);
+    setEditingDiagramId(null);
+    setDrawingInitialData(store.legacyScene ?? "");
+    setDrawingOpen(true);
+  };
+  const openExistingDiagram = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const image = target.closest("img[data-pios-diagram-id]") as HTMLImageElement | null;
+    if (!image || !selected) return;
+    const id = image.dataset.piosDiagramId;
+    if (!id) return;
+    const diagram = readDiagramStore(inkData).diagrams.find((item) => item.id === id);
+    if (!diagram) {
+      onToast("The editable source for this diagram could not be found.");
+      return;
+    }
+    setEditingDiagramId(id);
+    setDrawingInitialData(diagram.sceneData);
+    setDrawingOpen(true);
+  };
+  const saveDrawing = async () => {
+    if (!selected || drawingSaving) return;
+    const exporter = drawingSceneExporterRef.current;
+    if (!exporter) {
+      onToast("The drawing workspace is still loading.");
+      return;
+    }
+    setDrawingSaving(true);
+    try {
+      const exported = await exporter();
+      if (exported.previewDataUrl.length > 3_500_000) {
+        throw new Error("This diagram preview is over 3.5 MB. Reduce its size or remove large embedded images.");
+      }
+      const diagramId = editingDiagramId ?? crypto.randomUUID();
+      const store = readDiagramStore(inkData);
+      const diagrams = [...store.diagrams];
+      const existingIndex = diagrams.findIndex((item) => item.id === diagramId);
+      const record = { id: diagramId, sceneData: exported.sceneData };
+      if (existingIndex >= 0) diagrams[existingIndex] = record;
+      else diagrams.push(record);
+      const nextInkData = JSON.stringify({ format: "pios-diagrams-v1", diagrams });
+
+      const editor = editorRef.current;
+      if (!editor) throw new Error("The note editor is no longer available.");
+      let image = editor.querySelector(`img[data-pios-diagram-id="${diagramId}"]`) as HTMLImageElement | null;
+      const previousPreviewSize = image?.getAttribute("src")?.length ?? 0;
+      const projectedHtmlSize = editor.innerHTML.length - previousPreviewSize + exported.previewDataUrl.length + (image ? 0 : 220);
+      if (projectedHtmlSize > 4_000_000) {
+        throw new Error("This note has reached its 4 MB content limit. Remove a large image or diagram first.");
+      }
+      if (nextInkData.length > 12_000_000) {
+        throw new Error("This note's editable drawing data exceeds the 12 MB limit.");
+      }
+      if (image) {
+        image.src = exported.previewDataUrl;
+        image.alt = "Editable diagram — double-click to modify";
+        image.title = "Double-click to edit this diagram";
+      } else {
+        restoreCaretAfterDiagramIdRef.current = diagramId;
+        image = document.createElement("img");
+        image.src = exported.previewDataUrl;
+        image.alt = "Editable diagram — double-click to modify";
+        image.className = "pios-inline-diagram";
+        image.title = "Double-click to edit this diagram";
+        image.dataset.piosDiagramId = diagramId;
+        image.contentEditable = "false";
+
+        let range = editorCursorRangeRef.current;
+        if (!range || !editor.contains(range.commonAncestorContainer)) {
+          range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+        }
+        range.deleteContents();
+        range.insertNode(image);
+        const lineBreak = document.createElement("br");
+        image.after(lineBreak);
+        const caret = document.createRange();
+        caret.setStartAfter(lineBreak);
+        caret.collapse(true);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(caret);
+      }
+
+      const nextHtml = sanitizeNoteHtml(editor.innerHTML);
+      const updated: PiosNote = {
+        ...selected,
+        title: draftTitle.trim() || "Untitled note",
+        bodyHtml: nextHtml,
+        plainText: plainTextFromHtml(nextHtml),
+        color: draftColor,
+        inkData: nextInkData,
+        coverUrl,
+        updatedAt: "Just now",
+        order: Date.now(),
+      };
+      await onNotesChange(notes.map((note) => note.id === selected.id ? updated : note));
+      setDraftHtml(nextHtml);
+      setInkData(nextInkData);
+      setDrawingOpen(false);
+      setEditingDiagramId(null);
+      editorCursorRangeRef.current = null;
+      onToast(editingDiagramId ? "Diagram updated in this note." : "Diagram inserted at the cursor.");
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "Could not save the diagram.");
+    } finally {
+      setDrawingSaving(false);
+    }
+  };
+  const cancelDrawing = () => {
+    drawingSceneExporterRef.current = null;
+    setDrawingOpen(false);
+    setEditingDiagramId(null);
+    setDrawingInitialData("");
   };
   const createFolder = (event: FormEvent) => {
     event.preventDefault();
@@ -231,6 +428,77 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML));
   };
   const handleEditorInput = () => { if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML)); };
+  const askPios = async () => {
+    if (!askText.trim() || !selected || askBusy) return;
+    setAskBusy(true); setAskAnswer("");
+    const context = "Current note title: " + draftTitle + "\nCurrent note content:\n" + plainTextFromHtml(draftHtml);
+    try {
+      const response = await sendChat(context + "\n\nUser question: " + askText.trim(), askConversationId, true);
+      setAskConversationId(response.conversationId);
+      setAskAnswer(response.answer);
+    } catch (error) {
+      setAskAnswer(error instanceof Error ? error.message : "Could not contact Ask PIOS. Check your provider connection.");
+    } finally { setAskBusy(false); }
+  };
+  const startToolbarDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!(event.target as HTMLElement).closest("[data-toolbar-handle]")) return;
+    const element = event.currentTarget;
+    const rect = element.getBoundingClientRect();
+    const origin = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+    const move = (moveEvent: PointerEvent) => setToolbarPosition({ x: origin.left + moveEvent.clientX - origin.x, y: origin.top + moveEvent.clientY - origin.y });
+    const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); setToolbarDragging(false); };
+    setToolbarDragging(true); window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop);
+  };
+
+  const handleCoverFile = (file?: File) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 2 * 1024 * 1024) { onToast("Cover images must be 2 MB or smaller."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setCoverUrl(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+  };
+
+  const insertBlock = (kind: string) => {
+    editorRef.current?.focus();
+    const html: Record<string, string> = { text: "<p><br></p>", h1: "<h2><br></h2>", h2: "<h3><br></h3>", bullet: "<ul><li><br></li></ul>", number: "<ol><li><br></li></ol>", todo: '<ul><li><input type="checkbox" /></li></ul>', quote: "<blockquote><br></blockquote>", divider: "<hr>" };
+    document.execCommand("insertHTML", false, html[kind] || html.text);
+    handleEditorInput(); setSlashOpen(false);
+  };
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (event.key === "/" && !selection?.toString() && (!selection?.anchorNode?.textContent?.trim() || selection.anchorOffset === 0)) { event.preventDefault(); setSlashOpen(true); }
+    if (event.key === "Escape") setSlashOpen(false);
+  };
+  const downloadFile = (name: string, content: string, type: string) => {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
+  };
+  const exportHtml = () => {
+    if (!selected) return;
+    const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(draftTitle) + '</title></head><body><h1>' + escapeHtml(draftTitle) + '</h1>' + sanitizeNoteHtml(draftHtml) + '</body></html>';
+    downloadFile((draftTitle || "pios-note") + ".html", html, "text/html"); setMoreOpen(false);
+  };
+  const exportPdf = () => {
+    if (!selected) return;
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) { onToast("Allow pop-ups to export as PDF."); return; }
+    win.document.write('<!doctype html><html><head><title>' + escapeHtml(draftTitle) + '</title><style>body{font:16px/1.7 Arial,sans-serif;max-width:780px;margin:56px auto;padding:0 28px;color:#1b2a24}</style></head><body><h1>' + escapeHtml(draftTitle) + '</h1>' + sanitizeNoteHtml(draftHtml) + '</body></html>');
+    win.document.close(); win.focus(); win.print(); setMoreOpen(false);
+  };
+  const duplicateNote = () => {
+    if (!selected) return;
+    const copy: PiosNote = { ...selected, id: crypto.randomUUID(), title: selected.title + " (copy)", pinned: false, archived: false, updatedAt: "Just now", order: Date.now() };
+    onNotesChange([copy, ...notes]); setSelectedId(copy.id); setMoreOpen(false); onToast("Note duplicated.");
+  };
+  const deletePermanently = () => {
+    if (!selected || !window.confirm('Permanently delete "' + selected.title + '"? This cannot be undone.')) return;
+    onNotesChange(notes.filter((note) => note.id !== selected.id)); setSelectedId(null); setMoreOpen(false); onToast("Note permanently deleted.");
+  };
+  const toggleFullscreen = async () => {
+    if (!editorPaneRef.current) return;
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else await editorPaneRef.current.requestFullscreen(); }
+    catch { onToast("Fullscreen is not available in this browser."); }
+  };
 
   const toggleArchive = () => { if (!selected) return; updateNote(selected.id, { archived: !selected.archived }); setSelectedId(null); onToast(selected.archived ? "Note restored." : "Note archived. You can find it under Archived."); };
   const togglePin = () => { if (!selected) return; updateNote(selected.id, { pinned: !selected.pinned }); onToast(selected.pinned ? "Note unpinned." : "Note pinned."); };
@@ -261,13 +529,15 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       </div>
     </section>
 
-    <section className="note-editor-pane">
-      {selected ? <>
-        <div className="note-editor-toolbar-top"><div><span className="saved-indicator"><i/> Account storage</span><span className="editor-updated">Edited {selected.updatedAt.toLowerCase()}</span></div><div className="note-editor-actions"><button className={`icon-button ${selected.pinned ? "pinned" : ""}`} title={selected.pinned ? "Unpin note" : "Pin note"} onClick={togglePin}><Icon name="pin" size={16}/></button><button className="icon-button" title={selected.archived ? "Restore note" : "Archive note"} onClick={toggleArchive}><Icon name="archive" size={16}/></button><button className="icon-button" title="More note actions" onClick={() => onToast("Export and delete actions will be added with the note service.")}><Icon name="more" size={17}/></button></div></div>
+    <section ref={editorPaneRef} className={`note-editor-pane ${minimized ? "editor-minimized" : ""}`}>
+      {selected ? minimized ? <div className="editor-restore"><span>{draftTitle || "Untitled note"}</span><div><button type="button" onClick={() => setMinimized(false)}>Restore</button><button type="button" onClick={() => { setMinimized(false); setSelectedId(null); }}>Close</button></div></div> : <>
+        <div className="note-editor-toolbar-top"><div><span className="saved-indicator"><i/> Account storage</span><span className="editor-updated">Edited {selected.updatedAt.toLowerCase()}</span></div><div className="note-editor-actions"><button className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><Icon name="x" size={16}/></button><button className="icon-button" title="Minimise" onClick={() => setMinimized(true)}><Icon name="minus" size={16}/></button><button className="icon-button" title="Full screen" onClick={toggleFullscreen}>⛶</button><button className={`icon-button ${selected.pinned ? "pinned" : ""}`} title={selected.pinned ? "Unpin note" : "Pin note"} onClick={togglePin}><Icon name="pin" size={16}/></button><button className="icon-button" title={selected.archived ? "Restore note" : "Archive note"} onClick={toggleArchive}><Icon name="archive" size={16}/></button><div className="note-more-wrap"><button className="icon-button" title="More actions" aria-expanded={moreOpen} onClick={() => setMoreOpen(v => !v)}><Icon name="more" size={17}/></button>{moreOpen && <div className="note-more-menu"><button className="danger" onClick={deletePermanently}><Icon name="trash" size={15}/>Delete permanently</button><button onClick={duplicateNote}><Icon name="file-plus" size={15}/>Duplicate note</button><button onClick={exportHtml}><Icon name="braces" size={15}/>Export HTML</button><button onClick={exportPdf}><Icon name="file" size={15}/>Export PDF</button></div>}</div></div></div>
         <div className="note-editor-content">
+          <div className="note-cover" style={coverUrl ? { backgroundImage: `linear-gradient(90deg, rgba(0,0,0,.2), rgba(0,0,0,.05)), url(${coverUrl})` } : undefined}><button type="button" onClick={() => coverInputRef.current?.click()}>{coverUrl ? "Change cover" : "Add cover"}</button>{coverUrl && <button type="button" onClick={() => setCoverUrl("")}>Remove</button>}<input ref={coverInputRef} hidden type="file" accept="image/*" onChange={(event) => handleCoverFile(event.target.files?.[0])}/></div>
           <input className="note-editor-title" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Untitled note" aria-label="Note title"/>
           <div className="note-editor-meta"><span><Icon name="folder" size={13}/>{folders.find((folder) => folder.id === selected.folderId)?.name ?? "Inbox"}</span><span><Icon name="clock" size={13}/>{selected.updatedAt}</span></div>
-          <div className="rich-toolbar" role="toolbar" aria-label="Text formatting">
+          <div className="rich-toolbar floating-rich-toolbar" role="toolbar" aria-label="Text formatting" onPointerDown={startToolbarDrag} style={toolbarPosition.x || toolbarPosition.y ? { position: "fixed", left: toolbarPosition.x, top: toolbarPosition.y, zIndex: 50, cursor: toolbarDragging ? "grabbing" : undefined } : undefined}>
+             <span data-toolbar-handle title="Drag toolbar" style={{ cursor: "grab", padding: "0 6px", touchAction: "none" }}>⠿</span>
             <button type="button" title="Bold (Ctrl+B)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("bold")}><b>B</b></button>
             <button type="button" title="Italic (Ctrl+I)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("italic")}><i>I</i></button>
             <button type="button" title="Underline (Ctrl+U)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("underline")}><u>U</u></button>
@@ -277,8 +547,20 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <button type="button" title="Numbered list" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("insertOrderedList")}><Icon name="list-ordered" size={15}/></button>
             <button type="button" title="Checklist" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={insertChecklist}><Icon name="list-checks" size={15}/></button>
             <button type="button" title="Add link" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { const url = window.prompt("Enter link URL"); if (url) format("createLink", url); }}><Icon name="link" size={15}/></button>
+            <button type="button" title="Insert diagram at cursor" onMouseDown={rememberEditorCursor} onClick={openNewDiagram}><Icon name="pencil-ruler" size={15}/></button>
           </div>
-          <div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} data-placeholder="Start writing..." />
+          <div className="note-editor-body-wrap"><div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyDown={handleEditorKeyDown} onDoubleClick={openExistingDiagram} data-placeholder="Type / for commands, or start writing..." />{slashOpen && <div className="slash-command-menu">{[["text","Text"],["h1","Heading 1"],["h2","Heading 2"],["bullet","Bulleted list"],["number","Numbered list"],["todo","To-do list"],["quote","Quote"],["divider","Divider"]].map(([key,label]) => <button key={key} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertBlock(key)}>{label}</button>)}</div>}</div>
+          <section className="note-design-tools">
+            <div className="note-design-tools-icon" aria-hidden="true">✎</div>
+            <div className="note-design-tools-copy">
+              <strong>Design tools</strong>
+              <span>Insert a tightly cropped, editable diagram exactly where your text cursor is placed.</span>
+              <small>{savedDiagramCount} saved diagram{savedDiagramCount === 1 ? "" : "s"} · Double-click a diagram to edit it.</small>
+            </div>
+            <button type="button" className="button button-secondary button-small" onMouseDown={rememberEditorCursor} onClick={openNewDiagram}>Insert diagram</button>
+          </section>
+          <button type="button" className="ask-pios-fab" onClick={() => setAskOpen(!askOpen)}><Icon name="sparkles" size={15}/> Ask PIOS</button>
+          {askOpen && <div className="ask-pios-panel"><strong>Ask PIOS</strong><p>Ask about this note or turn it into a learning resource.</p><textarea value={askText} onChange={(event) => setAskText(event.target.value)} placeholder="Ask something about this page..." rows={3}/><button className="button button-primary button-small" disabled={!askText.trim() || askBusy} onClick={() => void askPios()}>{askBusy ? "Thinking…" : "Ask"}</button>{askAnswer && <div className="ask-pios-answer" role="status">{askAnswer}</div>}</div>}
           <div className="note-editor-footer"><div className="note-color-picker">{colors.map((color) => <button key={color.id} type="button" title={color.name} aria-label={color.name} className={`note-color-dot ${color.id} ${draftColor === color.id ? "selected" : ""}`} onClick={() => setDraftColor(color.id)}/>)}</div><span>{plainTextFromHtml(draftHtml).trim().split(/\s+/).filter(Boolean).length} words</span><button className="button button-primary button-small" onClick={saveDraft}><Icon name="check" size={14}/>Save changes</button></div>
           <div className="note-routing-toggle"><button onClick={() => setShowDestination((value) => !value)}><Icon name="sparkles" size={14}/> Organise this note with PIOS <Icon name="chevron-down" size={13}/></button></div>
           {showDestination && <NoteDestination title={draftTitle} body={plainTextFromHtml(draftHtml)} folders={folders} notes={notes} folderId={currentFolderId} excludeId={selected.id} onFolderChange={(folderId) => updateNote(selected.id, { folderId })} onFoldersChange={onFoldersChange}/>}
@@ -286,6 +568,21 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       </> : <div className="note-editor-empty"><div><Icon name="sticky-note" size={27}/></div><h3>Select a note</h3><p>Choose a note from the list or create a new one to start writing.</p><button className="button button-primary button-small" onClick={onQuickCapture}><Icon name="plus" size={14}/>Create note</button></div>}
     </section>
 
+    {drawingOpen && selected && <div className="pios-design-studio-overlay" role="dialog" aria-modal="true" aria-label="Design tools">
+      <section className="pios-design-studio">
+        <header className="pios-design-studio-header">
+          <div><span className="pios-design-studio-eyebrow">PIOS DESIGN TOOLS</span><h2>{editingDiagramId ? "Edit diagram" : "New diagram"} · {draftTitle || selected.title}</h2><p>Draw only the diagram. PIOS will crop to its content and place it at your saved cursor position.</p></div>
+          <button type="button" className="icon-button" aria-label="Close design tools" onClick={cancelDrawing}><Icon name="x" size={18}/></button>
+        </header>
+        <div className="pios-design-studio-canvas">
+          <NoteDrawingCanvas key={selected.id + (editingDiagramId ?? "new")} sceneData={drawingInitialData} onRegisterSceneExporter={(exporter) => { drawingSceneExporterRef.current = exporter; }} />
+        </div>
+        <footer className="pios-design-studio-footer">
+          <span>The cropped preview appears in the note. Double-click it later to change arrows, shapes or labels.</span>
+          <div><button type="button" className="button button-secondary" onClick={cancelDrawing}>Cancel</button><button type="button" className="button button-primary" disabled={drawingSaving} onClick={() => void saveDrawing()}><Icon name="check" size={15}/>{drawingSaving ? "Saving…" : editingDiagramId ? "Update diagram" : "Save & Insert"}</button></div>
+        </footer>
+      </section>
+    </div>}
     {folderDialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setFolderDialog(false); }}><form className="modal new-folder-modal" onSubmit={createFolder}><div className="modal-header"><div><div className="eyebrow">ORGANISE YOUR KNOWLEDGE</div><h2>Create a folder</h2><p>Folders keep related notes together.</p></div><button className="icon-button" type="button" onClick={() => setFolderDialog(false)}><Icon name="x"/></button></div><label htmlFor="folder-name">Folder name</label><input id="folder-name" autoFocus value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="e.g. Java Concurrency"/><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setFolderDialog(false)}>Cancel</button><button type="submit" className="button button-primary" disabled={!folderName.trim()}><Icon name="plus" size={14}/>Create folder</button></div></form></div>}
   </div>;
 }

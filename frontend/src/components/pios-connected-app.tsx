@@ -31,7 +31,7 @@ function notePayload(note: PiosNote) {
   return {
     id: note.id, title: note.title, bodyHtml: note.bodyHtml, plainText: note.plainText,
     folderId: note.folderId || null, color: note.color, pinned: note.pinned,
-    archived: note.archived, order: note.order,
+    archived: note.archived, order: note.order, inkData: note.inkData ?? "", coverUrl: note.coverUrl ?? "",
   };
 }
 function sourceLabel(source: ApiSource) {
