@@ -34,6 +34,28 @@ const colors: { id: NoteColor; name: string }[] = [
   { id: "sky", name: "Sky" }, { id: "rose", name: "Rose" }, { id: "slate", name: "Slate" },
 ];
 
+type NoteDiagramRecord = { id: string; sceneData: string };
+type NoteDiagramStore = { format: "pios-diagrams-v1"; diagrams: NoteDiagramRecord[]; legacyScene?: string };
+type ExportedNoteDiagram = { sceneData: string; previewDataUrl: string };
+
+function readDiagramStore(raw: string): NoteDiagramStore {
+  if (!raw) return { format: "pios-diagrams-v1", diagrams: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.format === "pios-diagrams-v1" && Array.isArray(parsed.diagrams)) {
+      return { format: "pios-diagrams-v1", diagrams: parsed.diagrams.filter((item: unknown): item is NoteDiagramRecord =>
+        !!item && typeof item === "object" && typeof (item as NoteDiagramRecord).id === "string" && typeof (item as NoteDiagramRecord).sceneData === "string"
+      ) };
+    }
+    if (parsed?.format === "pios-excalidraw-v1" && Array.isArray(parsed.elements)) {
+      return { format: "pios-diagrams-v1", diagrams: [], legacyScene: raw };
+    }
+  } catch {
+    // Ignore malformed legacy drawing data and preserve it only until a replacement is saved.
+  }
+  return { format: "pios-diagrams-v1", diagrams: [] };
+}
+
 function makeNote(title: string, body: string, folderId: string, color: NoteColor = "sage"): PiosNote {
   const html = body.trim().split(/\n/).map((line) => line.trim() ? `<p>${escapeHtml(line)}</p>` : "<p><br></p>").join("");
   return {
@@ -165,6 +187,9 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [slashOpen, setSlashOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [drawingOpen, setDrawingOpen] = useState(false);
+  const [drawingSaving, setDrawingSaving] = useState(false);
+  const [drawingInitialData, setDrawingInitialData] = useState("");
+  const [editingDiagramId, setEditingDiagramId] = useState<string | null>(null);
   const [askText, setAskText] = useState("");
   const [askAnswer, setAskAnswer] = useState("");
   const [askBusy, setAskBusy] = useState(false);
@@ -175,7 +200,8 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [coverUrl, setCoverUrl] = useState("");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const editorPaneRef = useRef<HTMLElement>(null);
-  const drawingSceneReaderRef = useRef<(() => string) | null>(null);
+  const drawingSceneExporterRef = useRef<(() => Promise<ExportedNoteDiagram>) | null>(null);
+  const editorCursorRangeRef = useRef<Range | null>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
   const inboxFolderId = folders.find((folder) => folder.name.trim().toLowerCase() === "inbox")?.id ?? "inbox";
@@ -222,26 +248,122 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const updateNote = (id: string, patch: Partial<PiosNote>) => onNotesChange(notes.map((note) => note.id === id ? { ...note, ...patch } : note));
   const saveDraft = () => {
     if (!selected) return;
-    const body = plainTextFromHtml(draftHtml);
-    const latestInkData = drawingSceneReaderRef.current?.() ?? inkData;
-    drawingSceneReaderRef.current = null;
-    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: draftHtml, plainText: body, color: draftColor, inkData: latestInkData, coverUrl, updatedAt: "Just now", order: Date.now() });
+    const html = editorRef.current ? sanitizeNoteHtml(editorRef.current.innerHTML) : draftHtml;
+    const body = plainTextFromHtml(html);
+    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: html, plainText: body, color: draftColor, inkData, coverUrl, updatedAt: "Just now", order: Date.now() });
+    setDraftHtml(html);
     onToast("Note saved to your PIOS account.");
   };
+  const rememberEditorCursor = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) editorCursorRangeRef.current = range.cloneRange();
+  };
+  const openNewDiagram = () => {
+    rememberEditorCursor();
+    const store = readDiagramStore(inkData);
+    setEditingDiagramId(null);
+    setDrawingInitialData(store.legacyScene ?? "");
+    setDrawingOpen(true);
+  };
+  const openExistingDiagram = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const image = target.closest("img[data-pios-diagram-id]") as HTMLImageElement | null;
+    if (!image || !selected) return;
+    const id = image.dataset.piosDiagramId;
+    if (!id) return;
+    const diagram = readDiagramStore(inkData).diagrams.find((item) => item.id === id);
+    if (!diagram) {
+      onToast("The editable source for this diagram could not be found.");
+      return;
+    }
+    setEditingDiagramId(id);
+    setDrawingInitialData(diagram.sceneData);
+    setDrawingOpen(true);
+  };
   const saveDrawing = async () => {
-    if (!selected) return;
-    const latestInkData = drawingSceneReaderRef.current?.() ?? inkData;
-    const updated = { ...selected, inkData: latestInkData, updatedAt: "Just now", order: Date.now() };
-    drawingSceneReaderRef.current = null;
-    await onNotesChange(notes.map((note) => note.id === selected.id ? updated : note));
-    setInkData(latestInkData);
-    setDrawingOpen(false);
-    onToast("Drawing saved to this note.");
+    if (!selected || drawingSaving) return;
+    const exporter = drawingSceneExporterRef.current;
+    if (!exporter) {
+      onToast("The drawing workspace is still loading.");
+      return;
+    }
+    setDrawingSaving(true);
+    try {
+      const exported = await exporter();
+      const diagramId = editingDiagramId ?? crypto.randomUUID();
+      const store = readDiagramStore(inkData);
+      const diagrams = [...store.diagrams];
+      const existingIndex = diagrams.findIndex((item) => item.id === diagramId);
+      const record = { id: diagramId, sceneData: exported.sceneData };
+      if (existingIndex >= 0) diagrams[existingIndex] = record;
+      else diagrams.push(record);
+      const nextInkData = JSON.stringify({ format: "pios-diagrams-v1", diagrams });
+
+      const editor = editorRef.current;
+      if (!editor) throw new Error("The note editor is no longer available.");
+      let image = editor.querySelector(`img[data-pios-diagram-id="${diagramId}"]`) as HTMLImageElement | null;
+      if (image) {
+        image.src = exported.previewDataUrl;
+        image.alt = "Editable diagram — double-click to modify";
+      } else {
+        image = document.createElement("img");
+        image.src = exported.previewDataUrl;
+        image.alt = "Editable diagram — double-click to modify";
+        image.className = "pios-inline-diagram";
+        image.dataset.piosDiagramId = diagramId;
+        image.contentEditable = "false";
+
+        let range = editorCursorRangeRef.current;
+        if (!range || !editor.contains(range.commonAncestorContainer)) {
+          range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+        }
+        range.deleteContents();
+        range.insertNode(image);
+        const lineBreak = document.createElement("br");
+        image.after(lineBreak);
+        const caret = document.createRange();
+        caret.setStartAfter(lineBreak);
+        caret.collapse(true);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(caret);
+      }
+
+      const nextHtml = sanitizeNoteHtml(editor.innerHTML);
+      const updated: PiosNote = {
+        ...selected,
+        title: draftTitle.trim() || "Untitled note",
+        bodyHtml: nextHtml,
+        plainText: plainTextFromHtml(nextHtml),
+        color: draftColor,
+        inkData: nextInkData,
+        coverUrl,
+        updatedAt: "Just now",
+        order: Date.now(),
+      };
+      await onNotesChange(notes.map((note) => note.id === selected.id ? updated : note));
+      setDraftHtml(nextHtml);
+      setInkData(nextInkData);
+      setDrawingOpen(false);
+      setEditingDiagramId(null);
+      editorCursorRangeRef.current = null;
+      onToast(editingDiagramId ? "Diagram updated in this note." : "Diagram inserted at the cursor.");
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "Could not save the diagram.");
+    } finally {
+      setDrawingSaving(false);
+    }
   };
   const cancelDrawing = () => {
-    if (selected) setInkData(selected.inkData ?? "");
-    drawingSceneReaderRef.current = null;
+    drawingSceneExporterRef.current = null;
     setDrawingOpen(false);
+    setEditingDiagramId(null);
+    setDrawingInitialData("");
   };
   const createFolder = (event: FormEvent) => {
     event.preventDefault();
@@ -396,10 +518,10 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <div className="note-design-tools-icon" aria-hidden="true">✎</div>
             <div className="note-design-tools-copy">
               <strong>Design tools</strong>
-              <span>Open a separate drawing workspace for sketches, diagrams, shapes and visual thinking.</span>
-              <small>{inkData ? "This note has a saved drawing." : "No drawing saved yet."}</small>
+              <span>Insert a tightly cropped, editable diagram exactly where your text cursor is placed.</span>
+              <small>{readDiagramStore(inkData).diagrams.length} saved diagram{readDiagramStore(inkData).diagrams.length === 1 ? "" : "s"} · Double-click a diagram to edit it.</small>
             </div>
-            <button type="button" className="button button-secondary button-small" onClick={() => setDrawingOpen(true)}>Open design tools</button>
+            <button type="button" className="button button-secondary button-small" onMouseDown={rememberEditorCursor} onClick={openNewDiagram}>Insert diagram</button>
           </section>
           <button type="button" className="ask-pios-fab" onClick={() => setAskOpen(!askOpen)}><Icon name="sparkles" size={15}/> Ask PIOS</button>
           {askOpen && <div className="ask-pios-panel"><strong>Ask PIOS</strong><p>Ask about this note or turn it into a learning resource.</p><textarea value={askText} onChange={(event) => setAskText(event.target.value)} placeholder="Ask something about this page..." rows={3}/><button className="button button-primary button-small" disabled={!askText.trim() || askBusy} onClick={() => void askPios()}>{askBusy ? "Thinking…" : "Ask"}</button>{askAnswer && <div className="ask-pios-answer" role="status">{askAnswer}</div>}</div>}
@@ -413,15 +535,15 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     {drawingOpen && selected && <div className="pios-design-studio-overlay" role="dialog" aria-modal="true" aria-label="Design tools">
       <section className="pios-design-studio">
         <header className="pios-design-studio-header">
-          <div><span className="pios-design-studio-eyebrow">PIOS DESIGN TOOLS</span><h2>{draftTitle || selected.title}</h2><p>Sketch, map, annotate and design independently from your typed note.</p><small className="pios-design-studio-tip">Image crop: select an image, then double-click it or press Enter. Adjust the crop handles and press Enter to apply.</small></div>
+          <div><span className="pios-design-studio-eyebrow">PIOS DESIGN TOOLS</span><h2>{editingDiagramId ? "Edit diagram" : "New diagram"} · {draftTitle || selected.title}</h2><p>Draw only the diagram. PIOS will crop to its content and place it at your saved cursor position.</p></div>
           <button type="button" className="icon-button" aria-label="Close design tools" onClick={cancelDrawing}><Icon name="x" size={18}/></button>
         </header>
         <div className="pios-design-studio-canvas">
-          <NoteDrawingCanvas key={selected.id} sceneData={inkData} onSceneChange={setInkData} onRegisterSceneReader={(reader) => { drawingSceneReaderRef.current = reader; }} />
+          <NoteDrawingCanvas key={selected.id + (editingDiagramId ?? "new")} sceneData={drawingInitialData} onRegisterSceneExporter={(exporter) => { drawingSceneExporterRef.current = exporter; }} />
         </div>
         <footer className="pios-design-studio-footer">
-          <span>Saved drawings stay attached to this note. Text edits are saved separately.</span>
-          <div><button type="button" className="button button-secondary" onClick={cancelDrawing}>Cancel</button><button type="button" className="button button-primary" onClick={() => void saveDrawing()}><Icon name="check" size={15}/>Save drawing</button></div>
+          <span>The cropped preview appears in the note. Double-click it later to change arrows, shapes or labels.</span>
+          <div><button type="button" className="button button-secondary" onClick={cancelDrawing}>Cancel</button><button type="button" className="button button-primary" disabled={drawingSaving} onClick={() => void saveDrawing()}><Icon name="check" size={15}/>{drawingSaving ? "Saving…" : editingDiagramId ? "Update diagram" : "Save & Insert"}</button></div>
         </footer>
       </section>
     </div>}
