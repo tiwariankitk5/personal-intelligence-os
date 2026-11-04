@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import type { FormEvent, MouseEvent } from "react";
 import { Icon } from "@/components/icon";
 import type { NoteFolder, NoteColor, PiosNote } from "@/lib/notes";
@@ -15,6 +16,11 @@ type NotesWorkspaceProps = {
   onQuickCapture: () => void;
   onToast: (message: string) => void;
 };
+
+const NoteDrawingCanvas = dynamic(() => import("@/components/note-drawing-canvas"), {
+  ssr: false,
+  loading: () => <div className="pios-excalidraw-loading">Loading drawing canvas…</div>,
+});
 
 type QuickCaptureModalProps = {
   folders: NoteFolder[];
@@ -157,7 +163,6 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [moreOpen, setMoreOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
-  const [drawingTool, setDrawingTool] = useState("select");
   const [askOpen, setAskOpen] = useState(false);
   const [askText, setAskText] = useState("");
   const [askAnswer, setAskAnswer] = useState("");
@@ -368,9 +373,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <button type="button" title="Add link" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { const url = window.prompt("Enter link URL"); if (url) format("createLink", url); }}><Icon name="link" size={15}/></button>
           </div>
           <div className="note-editor-body-wrap"><div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyDown={handleEditorKeyDown} data-placeholder="Type / for commands, or start writing..." />{slashOpen && <div className="slash-command-menu">{[["text","Text"],["h1","Heading 1"],["h2","Heading 2"],["bullet","Bulleted list"],["number","Numbered list"],["todo","To-do list"],["quote","Quote"],["divider","Divider"]].map(([key,label]) => <button key={key} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertBlock(key)}>{label}</button>)}</div>}</div>
-          <div className="note-drawing-toolbar" role="toolbar" aria-label="Drawing tools">
-            {["select","pen","highlighter","eraser","lasso"].map((tool) => <button key={tool} type="button" className={drawingTool === tool ? "active" : ""} onClick={() => setDrawingTool(tool)}><span>{tool === "select" ? "↖" : tool === "pen" ? "✎" : tool === "highlighter" ? "▰" : tool === "eraser" ? "◩" : "⌁"}</span><small>{tool}</small></button>)}
-          </div>
+          <NoteDrawingCanvas key={selected.id} sceneData={inkData} onSceneChange={setInkData} />
           <button type="button" className="ask-pios-fab" onClick={() => setAskOpen(!askOpen)}><Icon name="sparkles" size={15}/> Ask PIOS</button>
           {askOpen && <div className="ask-pios-panel"><strong>Ask PIOS</strong><p>Ask about this note or turn it into a learning resource.</p><textarea value={askText} onChange={(event) => setAskText(event.target.value)} placeholder="Ask something about this page..." rows={3}/><button className="button button-primary button-small" disabled={!askText.trim() || askBusy} onClick={() => void askPios()}>{askBusy ? "Thinking…" : "Ask"}</button>{askAnswer && <div className="ask-pios-answer" role="status">{askAnswer}</div>}</div>}
           <div className="note-editor-footer"><div className="note-color-picker">{colors.map((color) => <button key={color.id} type="button" title={color.name} aria-label={color.name} className={`note-color-dot ${color.id} ${draftColor === color.id ? "selected" : ""}`} onClick={() => setDraftColor(color.id)}/>)}</div><span>{plainTextFromHtml(draftHtml).trim().split(/\s+/).filter(Boolean).length} words</span><button className="button button-primary button-small" onClick={saveDraft}><Icon name="check" size={14}/>Save changes</button></div>
