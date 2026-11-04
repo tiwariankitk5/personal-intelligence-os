@@ -165,6 +165,9 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [askConversationId, setAskConversationId] = useState<string | undefined>();
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [toolbarDragging, setToolbarDragging] = useState(false);
+  const [inkData, setInkData] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const editorPaneRef = useRef<HTMLElement>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
@@ -191,7 +194,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     if (!selected) {
       setDraftTitle(""); setDraftHtml(""); return;
     }
-    setDraftTitle(selected.title); setDraftHtml(selected.bodyHtml); setDraftColor(selected.color);
+    setDraftTitle(selected.title); setDraftHtml(selected.bodyHtml); setDraftColor(selected.color); setInkData(selected.inkData ?? ""); setCoverUrl(selected.coverUrl ?? "");
     if (editorRef.current) editorRef.current.innerHTML = sanitizeNoteHtml(selected.bodyHtml);
   }, [selectedId, selected?.bodyHtml, selected?.title, selected?.color]);
 
@@ -213,7 +216,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const saveDraft = () => {
     if (!selected) return;
     const body = plainTextFromHtml(draftHtml);
-    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: draftHtml, plainText: body, color: draftColor, updatedAt: "Just now", order: Date.now() });
+    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: draftHtml, plainText: body, color: draftColor, inkData, coverUrl, updatedAt: "Just now", order: Date.now() });
     onToast("Note saved to your PIOS account.");
   };
   const createFolder = (event: FormEvent) => {
@@ -266,15 +269,23 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     setToolbarDragging(true); window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop);
   };
 
+  const handleCoverFile = (file?: File) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 2 * 1024 * 1024) { onToast("Cover images must be 2 MB or smaller."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setCoverUrl(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+  };
+
   const insertBlock = (kind: string) => {
     editorRef.current?.focus();
-    const html: Record<string, string> = { text: "<p><br></p>", h1: "<h2><br></h2>", h2: "<h3><br></h3>", bullet: "<ul><li><br></li></ul><p><br></p>", number: "<ol><li><br></li></ol><p><br></p>", todo: '<ul><li><input type="checkbox" /></li></ul><p><br></p>', quote: "<blockquote><br></blockquote><p><br></p>", divider: "<hr><p><br></p>" };
+    const html: Record<string, string> = { text: "<p><br></p>", h1: "<h2><br></h2>", h2: "<h3><br></h3>", bullet: "<ul><li><br></li></ul>", number: "<ol><li><br></li></ol>", todo: '<ul><li><input type="checkbox" /></li></ul>', quote: "<blockquote><br></blockquote>", divider: "<hr>" };
     document.execCommand("insertHTML", false, html[kind] || html.text);
     handleEditorInput(); setSlashOpen(false);
   };
   const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const selection = window.getSelection();
-    if (event.key === "/" && !selection?.toString() && !selection?.anchorNode?.textContent?.trim()) { event.preventDefault(); setSlashOpen(true); }
+    if (event.key === "/" && !selection?.toString() && (!selection?.anchorNode?.textContent?.trim() || selection.anchorOffset === 0)) { event.preventDefault(); setSlashOpen(true); }
     if (event.key === "Escape") setSlashOpen(false);
   };
   const downloadFile = (name: string, content: string, type: string) => {
@@ -343,7 +354,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
         <div className="note-editor-content">
           <input className="note-editor-title" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Untitled note" aria-label="Note title"/>
           <div className="note-editor-meta"><span><Icon name="folder" size={13}/>{folders.find((folder) => folder.id === selected.folderId)?.name ?? "Inbox"}</span><span><Icon name="clock" size={13}/>{selected.updatedAt}</span></div>
-          <div className="rich-toolbar floating-rich-toolbar" role="toolbar" aria-label="Text formatting">
+          <div className="rich-toolbar floating-rich-toolbar" role="toolbar" aria-label="Text formatting" onPointerDown={startToolbarDrag} style={toolbarPosition.x || toolbarPosition.y ? { position: "fixed", left: toolbarPosition.x, top: toolbarPosition.y, zIndex: 50, cursor: toolbarDragging ? "grabbing" : undefined } : undefined}>\n             <span data-toolbar-handle title="Drag toolbar" style={{ cursor: "grab", padding: "0 6px", touchAction: "none" }}>⠿</span>
             <button type="button" title="Bold (Ctrl+B)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("bold")}><b>B</b></button>
             <button type="button" title="Italic (Ctrl+I)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("italic")}><i>I</i></button>
             <button type="button" title="Underline (Ctrl+U)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("underline")}><u>U</u></button>
@@ -359,7 +370,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             {["select","pen","highlighter","eraser","lasso"].map((tool) => <button key={tool} type="button" className={drawingTool === tool ? "active" : ""} onClick={() => setDrawingTool(tool)}><span>{tool === "select" ? "↖" : tool === "pen" ? "✎" : tool === "highlighter" ? "▰" : tool === "eraser" ? "◩" : "⌁"}</span><small>{tool}</small></button>)}
           </div>
           <button type="button" className="ask-pios-fab" onClick={() => setAskOpen(!askOpen)}><Icon name="sparkles" size={15}/> Ask PIOS</button>
-          {askOpen && <div className="ask-pios-panel"><strong>Ask PIOS</strong><p>Ask about this note or turn it into a learning resource.</p><textarea placeholder="Ask something about this page..." rows={3}/><button className="button button-primary button-small" onClick={() => onToast("Connect the PIOS assistant service to send this question.")}>Ask</button></div>}
+          {askOpen && <div className="ask-pios-panel"><strong>Ask PIOS</strong><p>Ask about this note or turn it into a learning resource.</p><textarea value={askText} onChange={(event) => setAskText(event.target.value)} placeholder="Ask something about this page..." rows={3}/><button className="button button-primary button-small" disabled={!askText.trim() || askBusy} onClick={() => void askPios()}>{askBusy ? "Thinking…" : "Ask"}</button>{askAnswer && <div className="ask-pios-answer" role="status">{askAnswer}</div>}</div>}
           <div className="note-editor-footer"><div className="note-color-picker">{colors.map((color) => <button key={color.id} type="button" title={color.name} aria-label={color.name} className={`note-color-dot ${color.id} ${draftColor === color.id ? "selected" : ""}`} onClick={() => setDraftColor(color.id)}/>)}</div><span>{plainTextFromHtml(draftHtml).trim().split(/\s+/).filter(Boolean).length} words</span><button className="button button-primary button-small" onClick={saveDraft}><Icon name="check" size={14}/>Save changes</button></div>
           <div className="note-routing-toggle"><button onClick={() => setShowDestination((value) => !value)}><Icon name="sparkles" size={14}/> Organise this note with PIOS <Icon name="chevron-down" size={13}/></button></div>
           {showDestination && <NoteDestination title={draftTitle} body={plainTextFromHtml(draftHtml)} folders={folders} notes={notes} folderId={currentFolderId} excludeId={selected.id} onFolderChange={(folderId) => updateNote(selected.id, { folderId })} onFoldersChange={onFoldersChange}/>}
