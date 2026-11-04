@@ -347,6 +347,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
         image.src = exported.previewDataUrl;
         image.alt = "Editable diagram — double-click to modify";
         image.className = "pios-inline-diagram";
+        image.title = "Double-click to edit this diagram";
         image.dataset.piosDiagramId = diagramId;
         image.contentEditable = "false";
 
