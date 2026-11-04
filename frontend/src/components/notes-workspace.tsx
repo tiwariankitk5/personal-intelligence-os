@@ -5,6 +5,7 @@ import type { FormEvent, MouseEvent } from "react";
 import { Icon } from "@/components/icon";
 import type { NoteFolder, NoteColor, PiosNote } from "@/lib/notes";
 import { plainTextFromHtml, sanitizeNoteHtml, suggestNoteDestination } from "@/lib/notes";
+import { sendChat } from "@/lib/api";
 
 type NotesWorkspaceProps = {
   notes: PiosNote[];
@@ -158,6 +159,12 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [slashOpen, setSlashOpen] = useState(false);
   const [drawingTool, setDrawingTool] = useState("select");
   const [askOpen, setAskOpen] = useState(false);
+  const [askText, setAskText] = useState("");
+  const [askAnswer, setAskAnswer] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askConversationId, setAskConversationId] = useState<string | undefined>();
+  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
+  const [toolbarDragging, setToolbarDragging] = useState(false);
   const editorPaneRef = useRef<HTMLElement>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
