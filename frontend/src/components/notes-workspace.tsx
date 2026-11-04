@@ -340,6 +340,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       if (image) {
         image.src = exported.previewDataUrl;
         image.alt = "Editable diagram — double-click to modify";
+        image.title = "Double-click to edit this diagram";
       } else {
         restoreCaretAfterDiagramIdRef.current = diagramId;
         image = document.createElement("img");
