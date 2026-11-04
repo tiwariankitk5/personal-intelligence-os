@@ -52,8 +52,11 @@ Permanent deletion must require confirmation. Export PDF should use a print-read
 4. Browser testing, responsive behaviour, keyboard accessibility, and regression tests.
 
 ## Current drawing implementation
-- @excalidraw/excalidraw is loaded client-side because the editor depends on browser APIs.
-- The canvas is mounted in a dedicated full-viewport modal workspace opened from the note editor's Design tools panel.
-- Scene updates are staged while the studio is open. Save drawing reads the latest scene (including the last debounced update) and persists it to the selected note immediately. Cancel discards the current editing session.
-- The stored payload uses a PIOS wrapper (pios-excalidraw-v1) around Excalidraw elements, canvas settings, and binary files.
-- Manual browser validation is still required after pulling the branch.
+- Drawing starts from the cursor in the rich-text editor and opens in a separate PIOS Design Tools studio.
+- Saving a new drawing exports a tightly bounded PNG preview around the drawn elements and inserts it at the saved cursor position in the note body.
+- The preview image carries a stable diagram ID. Double-clicking it reopens the matching editable Excalidraw scene.
+- Saving an edit replaces the preview at the same position and updates the original scene; it does not create a second diagram.
+- Each editable diagram scene is stored in the note's existing ink_data field as a pios-diagrams-v1 collection. The inline PNG preview is stored in body_html.
+- The backend HTML allowlist permits only PNG data URLs for diagram images, validates diagram IDs, and applies request-size limits. It continues to remove unsupported HTML and active content.
+- The Excalidraw PNG export is cropped to the drawing bounds with a small padding; the full editable scene remains available for arrows, connectors, shapes, labels and further revisions.
+- Manual browser validation is required: insert at a mid-paragraph cursor, reload the note, double-click to edit, add or change arrows, save, and verify that the preview updates without moving.
