@@ -7,7 +7,7 @@ export type ApiFolder = { id: string; name: string; color: string };
 export type ApiNote = {
   id: string; title: string; bodyHtml: string; plainText: string; folderId: string | null;
   color: "sage" | "butter" | "lavender" | "sky" | "rose" | "slate";
-  pinned: boolean; archived: boolean; order: number; updatedAt: string;
+  pinned: boolean; archived: boolean; order: number; updatedAt: string; inkData?: string; coverUrl?: string;
 };
 export type ApiSource = {
   id: string; title: string; kind: string; collection: string; originalFileName?: string;
