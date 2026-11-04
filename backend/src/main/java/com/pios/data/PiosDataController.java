@@ -227,9 +227,10 @@ public class PiosDataController {
     @Transactional
     public void deleteSource(@PathVariable UUID id) {
         UUID userId = currentUserId();
-        String key = jdbc.query("SELECT storage_key FROM knowledge_sources WHERE id=? AND user_id=?",
-                rs -> rs.next() ? rs.getString(1) : null, id, userId);
-        if (key == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Source not found.");
+        List<String> keys = jdbc.query("SELECT storage_key FROM knowledge_sources WHERE id=? AND user_id=?",
+                (rs, row) -> rs.getString(1), id, userId);
+        if (keys.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Source not found.");
+        String key = keys.get(0);
         jdbc.update("DELETE FROM knowledge_sources WHERE id=? AND user_id=?", id, userId);
         if (key != null) try { Files.deleteIfExists(storagePath.resolve(key).normalize()); } catch (IOException ignored) { }
     }

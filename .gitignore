@@ -27,6 +27,7 @@ id_ed25519*
 # Build and test output
 dist/
 coverage/
+*.tsbuildinfo
 
 # Windows files
 Thumbs.db

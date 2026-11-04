@@ -4,9 +4,11 @@ PIOS is a self-hostable knowledge workspace. This repository contains a connecte
 
 This is a **runnable V1 foundation**, not the complete long-term PIOS vision or a hardened public SaaS release. The implementation status and limitations are listed below.
 
+The current target is a public multi-user product, with a self-hosted edition. See [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) for the Java/AI/RAG/Docker/Kubernetes roadmap and [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for release blockers and verification evidence.
+
 ## What works in V1
 
-- Register and sign in with email/password; passwords are BCrypt-hashed and API access uses signed JWTs.
+- Register and sign in with email/password; passwords are BCrypt-hashed. The browser uses an HttpOnly server-side session cookie with CSRF protection. Explicit bearer-token endpoints remain available for API clients.
 - User-scoped workspace data: folders, notes, sources, learning objectives, AI provider connections and chat conversations.
 - Persistent note editor with rich-text formatting, pin/archive, colours, search, sorting, drag reorder, folder creation and quick capture. Notes are stored in PostgreSQL, not browser-only local storage.
 - Destination suggestions for quick capture using local keyword matching. Users can choose a folder, create a folder, append to a similar existing page or create a separate note. The current suggestion logic is heuristic, not an autonomous AI agent.
@@ -47,6 +49,8 @@ Open:
 
 Register a PIOS account in the browser. The first workspace gets default folders (Inbox, Backend Engineering, AI & Machine Learning, Computer Science, Projects and Personal).
 
+If another local application uses these ports, set `PIOS_FRONTEND_PORT`, `PIOS_BACKEND_PORT` and `PIOS_DB_PORT` in `.env`. Container names and volumes are scoped by the Compose project so separate checkouts can coexist. Use a distinct Compose project name when directory names are identical. The launcher detects the configured ports and prints the correct URLs.
+
 ### Stop PIOS
 
 ```powershell
@@ -71,6 +75,8 @@ Or inspect logs directly:
 docker compose ps
 docker compose logs -f db backend frontend
 ```
+
+Developers with Node.js 22+ can run `node scripts/smoke-test.mjs` against a disposable running stack. Set `PIOS_TEST_API_URL` when using a non-default API port. The test creates two synthetic accounts and checks sessions, CSRF, notes, sources, uploads, learning progress and cross-account rejection. It does not call AI providers. The test accounts remain in the database, so use local/test environments.
 
 You can also double-click `scripts\start-pios.cmd` to launch the same Windows setup script without changing your PowerShell execution policy.
 
@@ -112,7 +118,11 @@ Base URL: `http://localhost:8080/api/v1`
 | AI chat | `POST /ai/chat`, `GET /ai/conversations`, `GET /ai/conversations/{id}/messages` |
 | Learning | `GET/POST /learning/objectives`, `PATCH/DELETE /learning/objectives/{id}` |
 
-Except registration/login and the health endpoint, API requests require `Authorization: Bearer <accessToken>`.
+The browser authenticates through `POST /auth/session/register` and `POST /auth/session/login`, which return user metadata without a bearer token. It sends cookies with requests and fetches `GET /auth/csrf` before writes, sending the returned header/token. `POST /auth/logout` invalidates the session. Login rotates the session ID and CSRF token. The session has a 30-minute idle timeout.
+
+Session cookies default to `Secure`, `HttpOnly` and `SameSite=Lax`. Production must use HTTPS and a same-site frontend/API deployment. The local Docker Compose stack explicitly sets `APP_SESSION_COOKIE_SECURE=false` for HTTP localhost; direct local backend development needs the same setting. Old browser-local tokens are removed and users must sign in again after upgrading. Sessions are currently in-memory: restarts sign users out and multiple backend replicas require shared session storage before rollout.
+
+API clients can still obtain bearer tokens through `/auth/register` and `/auth/login`. All unsafe requests, including token issuance and bearer-authenticated writes, now require a CSRF token and its associated session cookie. Fetch `/auth/csrf` with a cookie jar first. Except the public auth/CSRF and health endpoints, requests require an authenticated session or `Authorization: Bearer <accessToken>`.
 
 ## Project layout
 
@@ -147,7 +157,7 @@ pios-v1-fullstack/
 - No desktop menu-bar/notch quick-capture companion; the current quick capture runs inside the PIOS browser tab.
 - No agent workflow execution, organisation multi-tenancy, collaboration, realtime sync, full concept graph extraction, advanced curriculum generation or spaced-repetition scheduler.
 - Scanned PDFs need OCR; OCR is not enabled. URL crawling and YouTube ingestion are not included.
-- The frontend currently stores the access token in browser localStorage. Before public deployment, move authentication to secure HttpOnly cookies and apply a reviewed CSRF strategy.
+- Browser authentication now uses HttpOnly session cookies and CSRF tokens. Shared session persistence, account recovery and verification, abuse controls, deployment/browser validation and an independent security review remain required for a public service.
 - Add API rate limits, provider spend limits, robust SSRF/egress controls for custom model endpoints, account deletion/export, database and file backups, HTTPS, logging/monitoring, malware scanning and a security review before public/multi-tenant deployment.
 - This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The Spring Boot 3.5.16 line is the final OSS 3.5.x release; plan a tested move to a supported 4.x line before long-term production maintenance.
 

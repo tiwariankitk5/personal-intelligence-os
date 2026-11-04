@@ -5,6 +5,7 @@ This is the Java 21 / Spring Boot API used by the root PIOS Docker Compose stack
 ## Responsibilities
 
 - Email/password registration and login with BCrypt and signed JWT access tokens.
+- Browser session endpoints with HttpOnly cookies, CSRF protection, session ID rotation and server-side logout. Cookies are secure by default; set `APP_SESSION_COOKIE_SECURE=false` only for direct local HTTP development (root Compose already sets this).
 - Account-scoped user profile and workspace endpoints.
 - Account-scoped folders and rich-text notes CRUD.
 - PDF, TXT, Markdown and pasted-text ingestion, extracted text persistence, file storage and chunk creation.
