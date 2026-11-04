@@ -25,7 +25,9 @@ Permanent deletion must require confirmation. Export PDF should use a print-read
 - Embed the Excalidraw React editor for freehand drawing, selection, erasing, shapes, arrows, lines, text, image insertion, zoom/pan, undo/redo, and its native drawing export workflow.
 - Persist the Excalidraw scene (elements, relevant canvas settings, and embedded file data) as structured JSON in the note's existing ink_data field.
 - Save the latest scene together with the note when the user selects Save changes.
-- The drawing canvas is currently a dedicated visual section below the typed editor body. Interleaving movable drawings between arbitrary rich-text blocks remains a separate follow-up enhancement.
+- Drawing tools open in a separate PIOS Design Tools studio launched from the note editor; the drawing surface is not embedded inline below the typed content.
+- The studio has its own Cancel and Save drawing actions. Saving writes the Excalidraw scene to the current note immediately while leaving unsaved text edits independent.
+- The initial drawing-tool palette concept is retained as a separate entry point, while Excalidraw supplies the working design tools.
 
 ## Slash command behaviour
 - Typing `/` at an empty block opens a filtered command menu.
@@ -51,7 +53,7 @@ Permanent deletion must require confirmation. Export PDF should use a print-read
 
 ## Current drawing implementation
 - @excalidraw/excalidraw is loaded client-side because the editor depends on browser APIs.
-- The canvas is mounted in a fixed-height visual section within the note editor, beneath the typed content.
-- Scene updates are staged in the editor and included in the existing Save changes operation; the latest scene is read at save time to avoid losing the final stroke during the debounce window.
+- The canvas is mounted in a dedicated full-viewport modal workspace opened from the note editor's Design tools panel.
+- Scene updates are staged while the studio is open. Save drawing reads the latest scene (including the last debounced update) and persists it to the selected note immediately. Cancel discards the current editing session.
 - The stored payload uses a PIOS wrapper (pios-excalidraw-v1) around Excalidraw elements, canvas settings, and binary files.
 - Manual browser validation is still required after pulling the branch.
