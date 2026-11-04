@@ -7,6 +7,7 @@ import "@excalidraw/excalidraw/index.css";
 type NoteDrawingCanvasProps = {
   sceneData: string;
   onSceneChange: (scene: string) => void;
+  onRegisterSceneReader: (reader: () => string) => void;
 };
 
 function restoreScene(sceneData: string) {
@@ -24,16 +25,20 @@ function restoreScene(sceneData: string) {
   }
 }
 
-export default function NoteDrawingCanvas({ sceneData, onSceneChange }: NoteDrawingCanvasProps) {
+export default function NoteDrawingCanvas({ sceneData, onSceneChange, onRegisterSceneReader }: NoteDrawingCanvasProps) {
   // The parent keys this component by note id, so this initial scene is read once per note.
   const initialData = useRef(restoreScene(sceneData));
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestScene = useRef("");
+  const latestScene = useRef(sceneData);
   const onSceneChangeRef = useRef(onSceneChange);
 
   useEffect(() => {
     onSceneChangeRef.current = onSceneChange;
   }, [onSceneChange]);
+
+  useEffect(() => {
+    onRegisterSceneReader(() => latestScene.current);
+  }, [onRegisterSceneReader]);
 
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
