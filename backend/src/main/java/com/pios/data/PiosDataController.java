@@ -116,12 +116,12 @@ public class PiosDataController {
     public List<NoteResponse> notes() {
         UUID userId = currentUserId();
         return jdbc.query("""
-                SELECT id,title,body_html,plain_text,folder_id,color,is_pinned,is_archived,sort_order,updated_at
+                SELECT id,title,body_html,plain_text,folder_id,color,is_pinned,is_archived,sort_order,ink_data,cover_url,updated_at
                 FROM notes WHERE user_id=? ORDER BY is_pinned DESC, sort_order ASC, updated_at DESC
                 """, (rs, row) -> new NoteResponse(rs.getObject("id", UUID.class), rs.getString("title"),
                 rs.getString("body_html"), rs.getString("plain_text"), rs.getObject("folder_id", UUID.class),
                 rs.getString("color"), rs.getBoolean("is_pinned"), rs.getBoolean("is_archived"),
-                rs.getLong("sort_order"), rs.getTimestamp("updated_at").toInstant()), userId);
+                rs.getLong("sort_order"), rs.getString("ink_data"), rs.getString("cover_url"), rs.getTimestamp("updated_at").toInstant()), userId);
     }
 
     @PostMapping("/notes")
@@ -136,7 +136,7 @@ public class PiosDataController {
                 INSERT INTO notes(id,user_id,folder_id,title,body_html,plain_text,color,is_pinned,is_archived,sort_order)
                 VALUES (?,?,?,?,?,?,?,?,?,?)
                 """, id, userId, request.folderId(), title, html, plain, safeNoteColor(request.color()),
-                request.pinned(), request.archived(), request.order());
+                request.pinned(), request.archived(), request.order(), request.inkData(), request.coverUrl());
         return noteById(id, userId);
     }
 
@@ -147,10 +147,10 @@ public class PiosDataController {
         String html = cleanHtml(request.bodyHtml());
         String plain = request.plainText() == null || request.plainText().isBlank() ? htmlToText(html) : request.plainText().trim();
         int updated = jdbc.update("""
-                UPDATE notes SET folder_id=?,title=?,body_html=?,plain_text=?,color=?,is_pinned=?,is_archived=?,sort_order=?,updated_at=now()
+                UPDATE notes SET folder_id=?,title=?,body_html=?,plain_text=?,color=?,is_pinned=?,is_archived=?,sort_order=?,ink_data=?,cover_url=?,updated_at=now()
                 WHERE id=? AND user_id=?
                 """, request.folderId(), request.title().trim(), html, plain, safeNoteColor(request.color()),
-                request.pinned(), request.archived(), request.order(), id, userId);
+                request.pinned(), request.archived(), request.order(), request.inkData(), request.coverUrl(), id, userId);
         if (updated == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Note not found.");
         return noteById(id, userId);
     }
@@ -387,9 +387,9 @@ public class PiosDataController {
     public record FolderResponse(UUID id, String name, String color) { }
     public record FolderRequest(UUID id, @NotBlank @Size(max = 120) String name, String color) { }
     public record NoteResponse(UUID id, String title, String bodyHtml, String plainText, UUID folderId, String color,
-                               boolean pinned, boolean archived, long order, Instant updatedAt) { }
+                               boolean pinned, boolean archived, long order, String inkData, String coverUrl, Instant updatedAt) { }
     public record NoteRequest(UUID id, @NotBlank @Size(max = 240) String title, String bodyHtml, String plainText,
-                              UUID folderId, String color, boolean pinned, boolean archived, long order) { }
+                              UUID folderId, String color, boolean pinned, boolean archived, long order, String inkData, String coverUrl) { }
     public record SourceResponse(UUID id, String title, String kind, String collection, String originalFileName,
                                  String sourceUrl, long byteSize, Instant updatedAt) { }
     public record TextSourceRequest(@NotBlank @Size(max = 400) String title, @NotBlank @Size(max = 100000) String content, String collection) { }
