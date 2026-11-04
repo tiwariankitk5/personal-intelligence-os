@@ -88,7 +88,7 @@ export function plainTextFromHtml(html: string) {
 export function sanitizeNoteHtml(html: string) {
   if (typeof window === "undefined" || typeof DOMParser === "undefined") return "";
   const parsed = new DOMParser().parseFromString(html, "text/html");
-  const allowed = new Set(["P", "BR", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "UL", "OL", "LI", "A", "H2", "H3", "BLOCKQUOTE", "HR", "INPUT"]);
+  const allowed = new Set(["P", "BR", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "UL", "OL", "LI", "A", "H2", "H3", "BLOCKQUOTE", "HR", "INPUT", "IMG"]);
   parsed.body.querySelectorAll("script,style,iframe,object,embed,svg,math").forEach((node) => node.remove());
   parsed.body.querySelectorAll("*").forEach((node) => {
     if (!allowed.has(node.tagName)) {
@@ -96,7 +96,19 @@ export function sanitizeNoteHtml(html: string) {
       return;
     }
     Array.from(node.attributes).forEach((attribute) => {
-      if (node.tagName === "A" && attribute.name === "href") {
+      if (node.tagName === "IMG" && attribute.name === "src") {
+        if (!/^data:image\\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(attribute.value)) node.removeAttribute("src");
+        else node.setAttribute("src", attribute.value);
+      } else if (node.tagName === "IMG" && attribute.name === "data-pios-diagram-id") {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attribute.value)) node.remove();
+        else node.setAttribute("data-pios-diagram-id", attribute.value);
+      } else if (node.tagName === "IMG" && attribute.name === "alt") {
+        node.setAttribute("alt", "Editable diagram");
+      } else if (node.tagName === "IMG" && attribute.name === "class") {
+        node.setAttribute("class", "pios-inline-diagram");
+      } else if (node.tagName === "IMG" && attribute.name === "contenteditable") {
+        node.setAttribute("contenteditable", "false");
+      } else if (node.tagName === "A" && attribute.name === "href") {
         try {
           const url = new URL(attribute.value, window.location.origin);
           if (!["http:", "https:", "mailto:"].includes(url.protocol)) node.removeAttribute("href");
@@ -111,6 +123,7 @@ export function sanitizeNoteHtml(html: string) {
       }
     });
     if (node.tagName === "INPUT" && node.getAttribute("type") !== "checkbox") node.remove();
+    if (node.tagName === "IMG" && (!node.getAttribute("src") || !node.getAttribute("data-pios-diagram-id"))) node.remove();
   });
   return parsed.body.innerHTML;
 }
