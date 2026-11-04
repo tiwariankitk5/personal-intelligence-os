@@ -10,7 +10,9 @@ export interface PiosNote {
   pinned: boolean;
   archived: boolean;
   updatedAt: string;
-  order: number;\n  inkData?: string;
+  order: number;
+  inkData?: string;
+  coverUrl?: string;
 }
 
 export interface NoteFolder {
