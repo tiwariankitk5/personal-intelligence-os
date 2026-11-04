@@ -244,6 +244,28 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML));
   };
   const handleEditorInput = () => { if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML)); };
+  const askPios = async () => {
+    if (!askText.trim() || !selected || askBusy) return;
+    setAskBusy(true); setAskAnswer("");
+    const context = "Current note title: " + draftTitle + "\nCurrent note content:\n" + plainTextFromHtml(draftHtml);
+    try {
+      const response = await sendChat(context + "\n\nUser question: " + askText.trim(), askConversationId, true);
+      setAskConversationId(response.conversationId);
+      setAskAnswer(response.answer);
+    } catch (error) {
+      setAskAnswer(error instanceof Error ? error.message : "Could not contact Ask PIOS. Check your provider connection.");
+    } finally { setAskBusy(false); }
+  };
+  const startToolbarDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!(event.target as HTMLElement).closest("[data-toolbar-handle]")) return;
+    const element = event.currentTarget;
+    const rect = element.getBoundingClientRect();
+    const origin = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+    const move = (moveEvent: PointerEvent) => setToolbarPosition({ x: origin.left + moveEvent.clientX - origin.x, y: origin.top + moveEvent.clientY - origin.y });
+    const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); setToolbarDragging(false); };
+    setToolbarDragging(true); window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop);
+  };
+
   const insertBlock = (kind: string) => {
     editorRef.current?.focus();
     const html: Record<string, string> = { text: "<p><br></p>", h1: "<h2><br></h2>", h2: "<h3><br></h3>", bullet: "<ul><li><br></li></ul><p><br></p>", number: "<ol><li><br></li></ol><p><br></p>", todo: '<ul><li><input type="checkbox" /></li></ul><p><br></p>', quote: "<blockquote><br></blockquote><p><br></p>", divider: "<hr><p><br></p>" };
