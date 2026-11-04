@@ -45,14 +45,7 @@ export default function NoteDrawingCanvas({ sceneData, onSceneChange, onRegister
   }, []);
 
   return (
-    <div className="pios-excalidraw-shell" aria-label="Note drawing canvas">
-      <div className="pios-excalidraw-heading">
-        <div>
-          <strong>Visual canvas</strong>
-          <span>Sketch ideas, map systems, draw diagrams, and annotate freely.</span>
-        </div>
-        <span className="pios-excalidraw-format">EXCALIDRAW</span>
-      </div>
+    <div className="pios-excalidraw-shell" aria-label="PIOS design canvas">
       <div className="pios-excalidraw-stage">
         <Excalidraw
           initialData={initialData.current as never}
@@ -76,9 +69,6 @@ export default function NoteDrawingCanvas({ sceneData, onSceneChange, onRegister
           }}
         />
       </div>
-      <p className="pios-excalidraw-hint">
-        Drawing changes are staged with this note. Select <strong>Save changes</strong> at the bottom of the page to persist the note and its canvas.
-      </p>
     </div>
   );
 }
