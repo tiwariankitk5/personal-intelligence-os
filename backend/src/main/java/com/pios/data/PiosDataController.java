@@ -336,16 +336,20 @@ public class PiosDataController {
 
     private static final Safelist NOTE_HTML_SAFELIST = Safelist.none()
             .addTags("p", "br", "strong", "b", "em", "i", "u", "s", "strike", "ul", "ol", "li",
-                    "a", "h2", "h3", "blockquote", "hr", "input")
+                    "a", "h2", "h3", "blockquote", "hr", "input", "img")
             .addAttributes("a", "href")
             .addProtocols("a", "href", "http", "https", "mailto")
-            .addAttributes("input", "type", "checked", "disabled");
+            .addAttributes("input", "type", "checked", "disabled")
+            .addAttributes("img", "src", "alt", "class", "data-pios-diagram-id", "contenteditable")
+            .addProtocols("img", "src", "data");
 
     private String cleanHtml(String value) {
         if (value == null || value.isBlank()) return "";
-        String bounded = value.length() > 100_000 ? value.substring(0, 100_000) : value;
+        if (value.length() > 4_000_000) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Note content exceeds the 4 MB limit.");
+        }
         Document.OutputSettings output = new Document.OutputSettings().prettyPrint(false);
-        String cleaned = Jsoup.clean(bounded, "", NOTE_HTML_SAFELIST, output);
+        String cleaned = Jsoup.clean(value, "", NOTE_HTML_SAFELIST, output);
         Document document = Jsoup.parseBodyFragment(cleaned);
         for (Element input : document.select("input")) {
             if (!"checkbox".equalsIgnoreCase(input.attr("type"))) {
@@ -354,6 +358,22 @@ public class PiosDataController {
                 input.attr("type", "checkbox");
                 input.attr("disabled", "disabled");
             }
+        }
+        for (Element image : document.select("img")) {
+            String source = image.attr("src");
+            String diagramId = image.attr("data-pios-diagram-id");
+            boolean safePng = source.matches("^data:image/png;base64,[A-Za-z0-9+/]+={0,2}$");
+            boolean safeId = diagramId.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
+            if (!safePng || !safeId || source.length() > 3_500_000) {
+                image.remove();
+                continue;
+            }
+            image.clearAttributes();
+            image.attr("src", source);
+            image.attr("alt", "Editable diagram — double-click to modify");
+            image.attr("class", "pios-inline-diagram");
+            image.attr("data-pios-diagram-id", diagramId);
+            image.attr("contenteditable", "false");
         }
         return document.body().html();
     }
@@ -388,8 +408,10 @@ public class PiosDataController {
     public record FolderRequest(UUID id, @NotBlank @Size(max = 120) String name, String color) { }
     public record NoteResponse(UUID id, String title, String bodyHtml, String plainText, UUID folderId, String color,
                                boolean pinned, boolean archived, long order, String inkData, String coverUrl, Instant updatedAt) { }
-    public record NoteRequest(UUID id, @NotBlank @Size(max = 240) String title, String bodyHtml, String plainText,
-                              UUID folderId, String color, boolean pinned, boolean archived, long order, String inkData, String coverUrl) { }
+    public record NoteRequest(UUID id, @NotBlank @Size(max = 240) String title,
+                              @Size(max = 4_000_000) String bodyHtml, @Size(max = 500_000) String plainText,
+                              UUID folderId, String color, boolean pinned, boolean archived, long order,
+                              @Size(max = 12_000_000) String inkData, @Size(max = 3_000_000) String coverUrl) { }
     public record SourceResponse(UUID id, String title, String kind, String collection, String originalFileName,
                                  String sourceUrl, long byteSize, Instant updatedAt) { }
     public record TextSourceRequest(@NotBlank @Size(max = 400) String title, @NotBlank @Size(max = 100000) String content, String collection) { }
