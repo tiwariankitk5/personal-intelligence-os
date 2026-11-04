@@ -97,7 +97,7 @@ export function sanitizeNoteHtml(html: string) {
     }
     Array.from(node.attributes).forEach((attribute) => {
       if (node.tagName === "IMG" && attribute.name === "src") {
-        if (!/^data:image\\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(attribute.value)) node.removeAttribute("src");
+        if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(attribute.value)) node.removeAttribute("src");
         else node.setAttribute("src", attribute.value);
       } else if (node.tagName === "IMG" && attribute.name === "data-pios-diagram-id") {
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attribute.value)) node.remove();
