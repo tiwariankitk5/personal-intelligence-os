@@ -21,8 +21,11 @@ Permanent deletion must require confirmation. Export PDF should use a print-read
 ## Floating editing tools
 - Rich-text toolbar is a floating, draggable palette.
 - Keep text formatting, headings, links, lists, checklists, tables, code, and embeds accessible.
-- Drawing palette is independently floating and supports pen, highlighter, eraser, lasso, selection, shapes, and image insertion.
-- Typed blocks and ink strokes coexist on the same page.
+- Keep typed rich-text content and a visual drawing canvas in the same note.
+- Embed the Excalidraw React editor for freehand drawing, selection, erasing, shapes, arrows, lines, text, image insertion, zoom/pan, undo/redo, and its native drawing export workflow.
+- Persist the Excalidraw scene (elements, relevant canvas settings, and embedded file data) as structured JSON in the note's existing ink_data field.
+- Save the latest scene together with the note when the user selects Save changes.
+- The drawing canvas is currently a dedicated visual section below the typed editor body. Interleaving movable drawings between arbitrary rich-text blocks remains a separate follow-up enhancement.
 
 ## Slash command behaviour
 - Typing `/` at an empty block opens a filtered command menu.
@@ -42,6 +45,13 @@ Permanent deletion must require confirmation. Export PDF should use a print-read
 
 ## Delivery sequence
 1. Editor chrome, top-right actions, cover, floating rich-text toolbar, slash menu, exports.
-2. Drawing/ink layer with persistence and pointer/Apple Pencil support.
+2. Embedded Excalidraw drawing canvas and per-note structured scene persistence.
 3. Floating Ask PIOS assistant and contextual actions.
 4. Browser testing, responsive behaviour, keyboard accessibility, and regression tests.
+
+## Current drawing implementation
+- @excalidraw/excalidraw is loaded client-side because the editor depends on browser APIs.
+- The canvas is mounted in a fixed-height visual section within the note editor, beneath the typed content.
+- Scene updates are staged in the editor and included in the existing Save changes operation; the latest scene is read at save time to avoid losing the final stroke during the debounce window.
+- The stored payload uses a PIOS wrapper (pios-excalidraw-v1) around Excalidraw elements, canvas settings, and binary files.
+- Manual browser validation is still required after pulling the branch.
