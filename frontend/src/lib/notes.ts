@@ -102,6 +102,8 @@ export function sanitizeNoteHtml(html: string) {
       } else if (node.tagName === "IMG" && attribute.name === "data-pios-diagram-id") {
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attribute.value)) node.remove();
         else node.setAttribute("data-pios-diagram-id", attribute.value);
+      } else if (node.tagName === "IMG" && attribute.name === "title") {
+        node.setAttribute("title", "Double-click to edit this diagram");
       } else if (node.tagName === "IMG" && attribute.name === "alt") {
         node.setAttribute("alt", "Editable diagram");
       } else if (node.tagName === "IMG" && attribute.name === "class") {
