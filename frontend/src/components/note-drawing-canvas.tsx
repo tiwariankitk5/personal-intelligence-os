@@ -77,7 +77,7 @@ export default function NoteDrawingCanvas({ sceneData, onSceneChange, onRegister
         />
       </div>
       <p className="pios-excalidraw-hint">
-        Drawing changes are staged with this note. Select <strong>Save changes</strong> above or below to persist the page.
+        Drawing changes are staged with this note. Select <strong>Save changes</strong> at the bottom of the page to persist the note and its canvas.
       </p>
     </div>
   );
