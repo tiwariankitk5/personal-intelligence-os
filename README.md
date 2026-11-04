@@ -6,6 +6,8 @@ This is a **runnable V1 foundation**, not the complete long-term PIOS vision or 
 
 The current target is a public multi-user product, with a self-hosted edition. See [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) for the Java/AI/RAG/Docker/Kubernetes roadmap and [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for release blockers and verification evidence.
 
+The integrated editor adds page covers/settings, searchable slash commands, code/tables, inline diagrams, a persistent Draft scratchpad and CSV/HTML/print exports. Read [accepted requirements](docs/ACCEPTED_REQUIREMENTS.md) and [editor validation](docs/EDITOR_VALIDATION.md) for delivered scope, test evidence and remaining work. A distributed systems study guide is in [docs/study-notes](docs/study-notes/distributed-systems.md).
+
 ## What works in V1
 
 - Register and sign in with email/password; passwords are BCrypt-hashed. The browser uses an HttpOnly server-side session cookie with CSRF protection. Explicit bearer-token endpoints remain available for API clients.

@@ -54,12 +54,18 @@ await other.request('/users/me');
 const folders = await owner.request('/folders');
 assert(folders.length > 0);
 const note = await owner.request('/notes', { method: 'POST', body: {
-  title: 'PIOS smoke note', bodyHtml: '<p>Private knowledge</p><script>alert(1)</script>',
+  title: 'PIOS smoke note', bodyHtml: '<h1>Heading</h1><p>Private knowledge</p><pre><code>class Example {}</code></pre><table><tr><td>Cell</td></tr></table><script>alert(1)</script>', editorSettings: JSON.stringify({theme:'black',icon:'Book',coverPosition:65}),
   folderId: folders[0].id, color: 'sage', pinned: false, archived: false, order: 0,
 } });
 assert(!note.bodyHtml.includes('<script'));
+assert(note.bodyHtml.includes('<code>'));
+assert(note.bodyHtml.includes('<table>'));
+assert.equal(JSON.parse(note.editorSettings).theme, 'black');
 assert(!(await other.request('/notes')).some((row) => row.id === note.id));
 await other.request(`/notes/${note.id}`, { method: 'DELETE', expected: 404 });
+await other.request(`/notes/${note.id}`, {method:'PUT',expected:404,body:{title:'Attempted overwrite',bodyHtml:'no access',folderId:null,color:'sage',pinned:false,archived:false,order:0}});
+await owner.request('/notes', {method:'POST',expected:400,body:{title:'Unsafe cover',bodyHtml:'',coverUrl:'data:image/svg+xml;base64,PHN2Zz4=',folderId:null,color:'sage',pinned:false,archived:false,order:0}});
+await owner.request('/notes', {method:'POST',expected:400,body:{title:'Invalid settings',bodyHtml:'',editorSettings:'not JSON',folderId:null,color:'sage',pinned:false,archived:false,order:0}});
 await owner.request(`/notes/${note.id}`, { method: 'DELETE' });
 
 const source = await owner.request('/sources/text', {
@@ -83,10 +89,18 @@ const updated = await owner.request(`/learning/objectives/${objective.id}`, { me
 assert.equal(updated.progress, 50);
 await owner.request(`/learning/objectives/${objective.id}`, { method: 'DELETE' });
 
+await owner.request(`/ai/providers/${randomUUID()}/test`, {method:'POST',expected:404});
+const sheetId = randomUUID();
+const sceneData = JSON.stringify({format:'pios-excalidraw-v1',elements:[],files:{},appState:{theme:'dark'},libraryItems:[]});
+await owner.request(`/drafts/${sheetId}`, {method:'PUT', body:{title:'Smoke draft',sceneData}});
+assert((await owner.request('/drafts')).some((sheet) => sheet.id === sheetId && sheet.sceneData === sceneData));
+assert(!(await other.request('/drafts')).some((sheet) => sheet.id === sheetId));
+await other.request(`/drafts/${sheetId}`, {method:'PUT',expected:404,body:{title:'No access',sceneData}});
+await owner.request(`/drafts/${sheetId}`, {method:'PUT',expected:400,body:{title:'Invalid',sceneData:'not JSON'}});
 await owner.request('/auth/logout', { method: 'POST', protect: false, expected: 403 });
 await owner.request('/users/me');
 await owner.request('/auth/logout', { method: 'POST', expected: 204 });
 await owner.request('/users/me', { expected: 401 });
 await other.request('/auth/logout', { method: 'POST', expected: 204 });
-console.log('PASS: session cookies, CSRF, private notes/sources/objectives, upload, deletion and logout.');
+console.log('PASS: session cookies, CSRF, private notes/sources/objectives, upload, rich blocks, page settings, private Draft persistence and logout.');
 console.log('Two smoke-test accounts remain; run this against a disposable/local database.');

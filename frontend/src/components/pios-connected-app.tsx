@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import { Icon } from "@/components/icon";
 import NotesWorkspace, { QuickCaptureModal } from "@/components/notes-workspace";
 import AiProvidersView from "@/components/ai-providers-view";
+import { createNoteWriter } from "@/lib/note-writer";
 import type { NoteFolder, PiosNote } from "@/lib/notes";
 import {
   ApiChatResponse, ApiFolder, ApiNote, ApiObjective, ApiProvider, ApiSource, ApiUser,
@@ -31,7 +32,7 @@ function notePayload(note: PiosNote) {
   return {
     id: note.id, title: note.title, bodyHtml: note.bodyHtml, plainText: note.plainText,
     folderId: note.folderId || null, color: note.color, pinned: note.pinned,
-    archived: note.archived, order: note.order,
+    archived: note.archived, order: note.order, inkData: note.inkData ?? "", coverUrl: note.coverUrl ?? "", editorSettings: note.editorSettings ?? "{}",
   };
 }
 function sourceLabel(source: ApiSource) {
@@ -54,6 +55,7 @@ export default function PiosConnectedApp() {
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [notes, setNotes] = useState<PiosNote[]>([]);
   const notesRef = useRef<PiosNote[]>([]);
+
   const foldersRef = useRef<NoteFolder[]>([]);
   const [sources, setSources] = useState<ApiSource[]>([]);
   const [objectives, setObjectives] = useState<ApiObjective[]>([]);
@@ -80,6 +82,13 @@ export default function PiosConnectedApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const notify = useCallback((message: string) => setToast(message), []);
+  const noteWriter = useMemo(() => createNoteWriter<PiosNote>({
+    create: (note) => createNote(notePayload(note)),
+    update: (note) => updateNote(note.id, notePayload(note)),
+    remove: removeNote,
+    equal: (left, right) => JSON.stringify(notePayload(left)) === JSON.stringify(notePayload(right)),
+    onError: (error) => notify(error instanceof Error ? error.message : "A note could not be saved. Retry saving your edit."),
+  }), [notify]);
 
   const loadWorkspace = useCallback(async () => {
     setDataLoading(true);
@@ -89,7 +98,7 @@ export default function PiosConnectedApp() {
       ]);
       const mappedFolders = folderRows.map((folder) => ({ id: folder.id, name: folder.name, color: folder.color }));
       const mappedNotes = noteRows.map(toPiosNote);
-      foldersRef.current = mappedFolders; notesRef.current = mappedNotes;
+      foldersRef.current = mappedFolders; notesRef.current = mappedNotes; noteWriter.reset(mappedNotes);
       setFolders(mappedFolders); setNotes(mappedNotes); setSources(sourceRows);
       setObjectives(objectiveRows); setProviders(providerRows);
     } catch (error) {
@@ -99,7 +108,7 @@ export default function PiosConnectedApp() {
       }
       notify(message);
     } finally { setDataLoading(false); }
-  }, [notify]);
+  }, [notify, noteWriter]);
 
   useEffect(() => {
     clearToken();
@@ -110,6 +119,7 @@ export default function PiosConnectedApp() {
 
   useEffect(() => {
     const expired = () => {
+      noteWriter.reset([]);
       setUser(null); setTokenExists(false); setAuthMode("login");
       setAuthError("Your session has expired. Sign in again to continue.");
       setNotes([]); setFolders([]); setSources([]); setObjectives([]); setProviders([]);
@@ -152,23 +162,9 @@ export default function PiosConnectedApp() {
     finally { setAuthBusy(false); }
   }
 
-  async function persistNotes(nextNotes: PiosNote[]) {
-    const previous = notesRef.current;
+  function persistNotes(nextNotes: PiosNote[]): Promise<boolean> {
     notesRef.current = nextNotes; setNotes(nextNotes);
-    const previousMap = new Map(previous.map((note) => [note.id, note]));
-    const nextIds = new Set(nextNotes.map((note) => note.id));
-    try {
-      for (const note of nextNotes) {
-        const old = previousMap.get(note.id);
-        const payload = notePayload(note);
-        if (!old) await createNote(payload);
-        else if (JSON.stringify(notePayload(old)) !== JSON.stringify(payload)) await updateNote(note.id, payload);
-      }
-      for (const old of previous) if (!nextIds.has(old.id)) await removeNote(old.id);
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "A note could not be saved.");
-      void loadWorkspace();
-    }
+    return noteWriter.save(nextNotes);
   }
 
   async function persistFolders(nextFolders: NoteFolder[]) {
@@ -179,22 +175,24 @@ export default function PiosConnectedApp() {
       for (const folder of nextFolders) {
         if (!previousIds.has(folder.id)) await createFolder(folder.name, folder.color, folder.id);
       }
+      return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : "A folder could not be saved.");
       void loadWorkspace();
+      return false;
     }
   }
 
   async function saveQuickNote(note: PiosNote, newFolder?: NoteFolder, appendToPageId?: string) {
     try {
-      if (newFolder && !foldersRef.current.some((folder) => folder.id === newFolder.id)) await persistFolders([...foldersRef.current, newFolder]);
+      if (newFolder && !foldersRef.current.some((folder) => folder.id === newFolder.id) && !await persistFolders([...foldersRef.current, newFolder])) return;
       if (appendToPageId) {
         const existing = notesRef.current.find((entry) => entry.id === appendToPageId);
         if (existing) {
           const updated = { ...existing, bodyHtml: `${existing.bodyHtml}<hr/><h3>${note.title}</h3>${note.bodyHtml}`, plainText: `${existing.plainText} ${note.title} ${note.plainText}`.trim(), updatedAt: "Just now", order: Date.now() };
-          await persistNotes(notesRef.current.map((entry) => entry.id === appendToPageId ? updated : entry));
+          if (!await persistNotes(notesRef.current.map((entry) => entry.id === appendToPageId ? updated : entry))) return;
         }
-      } else await persistNotes([note, ...notesRef.current]);
+      } else if (!await persistNotes([note, ...notesRef.current])) return;
       setQuickCaptureOpen(false); notify("Note saved to your PIOS workspace.");
     } catch (error) { notify(error instanceof Error ? error.message : "Could not save this note."); }
   }
@@ -256,6 +254,7 @@ export default function PiosConnectedApp() {
   async function logout() {
     try {
       await signOut();
+      noteWriter.reset([]);
       setUser(null); setTokenExists(false); setAuthMode("login");
       setFolders([]); setNotes([]); setSources([]); setObjectives([]); setProviders([]);
       notesRef.current = []; foldersRef.current = [];

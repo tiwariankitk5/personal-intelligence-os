@@ -34,6 +34,9 @@ server:
     include-stacktrace: never
 
 app:
+  ai:
+    allow-local-endpoints: ${PIOS_ALLOW_LOCAL_MODELS:false}
+    allowed-cloud-hosts: ${PIOS_ALLOWED_AI_HOSTS:api.openai.com,openrouter.ai,api.groq.com,api.deepseek.com,api.mistral.ai}
   jwt:
     secret-base64: ${APP_JWT_SECRET_BASE64}
     expiration-ms: ${APP_JWT_EXPIRATION_MS:43200000}

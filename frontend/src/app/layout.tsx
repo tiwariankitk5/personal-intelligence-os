@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import "./connected.css";
+import "./workspace.css";
 
 export const metadata: Metadata = {
   title: "PIOS — Personal Intelligence OS",

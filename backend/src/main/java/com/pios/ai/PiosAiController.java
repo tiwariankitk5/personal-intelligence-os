@@ -35,12 +35,14 @@ public class PiosAiController {
     private final SecretEncryptionService encryption;
     private final AiGatewayService gateway;
     private final ObjectMapper mapper;
+    private final ProviderEndpointPolicy endpoints;
 
-    public PiosAiController(JdbcTemplate jdbc, SecretEncryptionService encryption, AiGatewayService gateway, ObjectMapper mapper) {
+    public PiosAiController(JdbcTemplate jdbc, SecretEncryptionService encryption, AiGatewayService gateway, ObjectMapper mapper, ProviderEndpointPolicy endpoints) {
         this.jdbc = jdbc;
         this.encryption = encryption;
         this.gateway = gateway;
         this.mapper = mapper;
+        this.endpoints = endpoints;
     }
 
     @GetMapping("/providers")
@@ -171,10 +173,12 @@ public class PiosAiController {
     }
 
     private ProviderRow providerRow(UUID id, UUID userId) {
-        return jdbc.query("SELECT id,display_name,provider_type,model_name,base_url,encrypted_api_key FROM ai_provider_connections WHERE id=? AND user_id=?",
+        ProviderRow result = jdbc.query("SELECT id,display_name,provider_type,model_name,base_url,encrypted_api_key FROM ai_provider_connections WHERE id=? AND user_id=?",
                 rs -> rs.next() ? new ProviderRow(rs.getObject("id", UUID.class), rs.getString("display_name"),
                         new AiGatewayService.ProviderConfig(rs.getString("provider_type"), rs.getString("model_name"),
                                 rs.getString("base_url"), rs.getString("encrypted_api_key"))) : null, id, userId);
+        if (result == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Provider connection not found.");
+        return result;
     }
 
     private ProviderRow defaultProvider(UUID userId) {
@@ -225,28 +229,10 @@ public class PiosAiController {
 
     private String safeBaseUrl(String value, String type) {
         if (type.equals("ANTHROPIC") || type.equals("GEMINI")) return null;
-        String url = value == null || value.isBlank() ? "https://api.openai.com/v1" : value.trim();
-        try {
-            URI uri = URI.create(url);
-            String scheme = uri.getScheme();
-            String host = uri.getHost();
-            if (host == null || !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))) throw new IllegalArgumentException();
-            String lowerHost = host.toLowerCase(Locale.ROOT);
-            if (lowerHost.equals("169.254.169.254") || lowerHost.equals("metadata.google.internal")) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This endpoint is not allowed.");
-            }
-            if ("http".equalsIgnoreCase(scheme) && !List.of("localhost", "127.0.0.1", "host.docker.internal").contains(lowerHost)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use HTTPS for remote providers. For local models, use localhost or host.docker.internal.");
-            }
-            return url.replaceAll("/+$", "");
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a valid HTTPS provider URL or a supported local model URL.");
-        }
+        return endpoints.validate(value);
     }
 
-    private boolean isLocalEndpoint(String baseUrl) {
-        return baseUrl != null && (baseUrl.contains("localhost") || baseUrl.contains("127.0.0.1") || baseUrl.contains("host.docker.internal"));
-    }
+    private boolean isLocalEndpoint(String baseUrl) { return endpoints.isLocal(baseUrl); }
 
     private String json(Object value) {
         try { return mapper.writeValueAsString(value); }

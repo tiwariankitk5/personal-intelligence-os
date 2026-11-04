@@ -7,7 +7,7 @@ export type ApiFolder = { id: string; name: string; color: string };
 export type ApiNote = {
   id: string; title: string; bodyHtml: string; plainText: string; folderId: string | null;
   color: "sage" | "butter" | "lavender" | "sky" | "rose" | "slate";
-  pinned: boolean; archived: boolean; order: number; updatedAt: string;
+  pinned: boolean; archived: boolean; order: number; updatedAt: string; inkData?: string; coverUrl?: string; editorSettings?: string;
 };
 export type ApiSource = {
   id: string; title: string; kind: string; collection: string; originalFileName?: string;
@@ -94,6 +94,10 @@ export async function signOut() {
 }
 
 export const getMe = (checkingSession = false) => apiRequest<ApiUser>("/users/me", { skipAuth: checkingSession });
+export type DraftSheet = { id: string; title: string; sceneData: string; updatedAt: string };
+export const getDraftSheets = () => apiRequest<DraftSheet[]>("/drafts");
+export const saveDraftSheet = (sheet: Pick<DraftSheet, "id" | "title" | "sceneData">) =>
+  apiRequest<DraftSheet>(`/drafts/${sheet.id}`, { method: "PUT", body: JSON.stringify(sheet) });
 export const getFolders = () => apiRequest<ApiFolder[]>("/folders");
 export const createFolder = (name: string, color = "#7e9b8b", id?: string) => apiRequest<ApiFolder>("/folders", { method: "POST", body: JSON.stringify({ id, name, color }) });
 export const deleteFolder = (id: string) => apiRequest<void>(`/folders/${id}`, { method: "DELETE" });

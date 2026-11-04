@@ -13,10 +13,16 @@ import org.springframework.web.client.RestClientResponseException;
 public class AiGatewayService {
     private final ObjectMapper mapper;
     private final SecretEncryptionService encryption;
+    private final ProviderEndpointPolicy endpoints;
+    private final org.springframework.http.client.JdkClientHttpRequestFactory requests;
 
-    public AiGatewayService(ObjectMapper mapper, SecretEncryptionService encryption) {
+    public AiGatewayService(ObjectMapper mapper, SecretEncryptionService encryption, ProviderEndpointPolicy endpoints) {
         this.mapper = mapper;
         this.encryption = encryption;
+        this.endpoints = endpoints;
+        this.requests = new org.springframework.http.client.JdkClientHttpRequestFactory(java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(10)).followRedirects(java.net.http.HttpClient.Redirect.NEVER).build());
+        this.requests.setReadTimeout(java.time.Duration.ofSeconds(60));
     }
 
     public String complete(ProviderConfig provider, String systemPrompt, String userPrompt) {
@@ -38,8 +44,8 @@ public class AiGatewayService {
     }
 
     private String openAiCompatible(ProviderConfig provider, String key, String systemPrompt, String userPrompt) throws Exception {
-        String baseUrl = normalizeBaseUrl(provider.baseUrl());
-        RestClient client = RestClient.builder().baseUrl(baseUrl).build();
+        String baseUrl = endpoints.validate(provider.baseUrl());
+        RestClient client = RestClient.builder().requestFactory(requests).baseUrl(baseUrl).build();
         Map<String, Object> body = Map.of(
                 "model", provider.modelName(),
                 "temperature", 0.2,
@@ -57,7 +63,7 @@ public class AiGatewayService {
 
     private String anthropic(ProviderConfig provider, String key, String systemPrompt, String userPrompt) throws Exception {
         if (key == null || key.isBlank()) throw new AiProviderException("Anthropic requires an API key.");
-        RestClient client = RestClient.builder().baseUrl("https://api.anthropic.com").build();
+        RestClient client = RestClient.builder().requestFactory(requests).baseUrl("https://api.anthropic.com").build();
         Map<String, Object> body = Map.of(
                 "model", provider.modelName(), "max_tokens", 1800,
                 "system", systemPrompt,
@@ -75,7 +81,7 @@ public class AiGatewayService {
     private String gemini(ProviderConfig provider, String key, String systemPrompt, String userPrompt) throws Exception {
         if (key == null || key.isBlank()) throw new AiProviderException("Gemini requires an API key.");
         String model = provider.modelName().startsWith("models/") ? provider.modelName().substring(7) : provider.modelName();
-        RestClient client = RestClient.builder().baseUrl("https://generativelanguage.googleapis.com").build();
+        RestClient client = RestClient.builder().requestFactory(requests).baseUrl("https://generativelanguage.googleapis.com").build();
         Map<String, Object> body = Map.of(
                 "systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt))),
                 "contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userPrompt)))),
