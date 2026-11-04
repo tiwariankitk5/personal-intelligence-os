@@ -153,6 +153,10 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [folderDialog, setFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [showDestination, setShowDestination] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const editorPaneRef = useRef<HTMLElement>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
   const inboxFolderId = folders.find((folder) => folder.name.trim().toLowerCase() === "inbox")?.id ?? "inbox";
@@ -231,6 +235,47 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML));
   };
   const handleEditorInput = () => { if (editorRef.current) setDraftHtml(sanitizeNoteHtml(editorRef.current.innerHTML)); };
+  const insertBlock = (kind: string) => {
+    editorRef.current?.focus();
+    const html: Record<string, string> = { text: "<p><br></p>", h1: "<h2><br></h2>", h2: "<h3><br></h3>", bullet: "<ul><li><br></li></ul><p><br></p>", number: "<ol><li><br></li></ol><p><br></p>", todo: '<ul><li><input type="checkbox" /></li></ul><p><br></p>', quote: "<blockquote><br></blockquote><p><br></p>", divider: "<hr><p><br></p>" };
+    document.execCommand("insertHTML", false, html[kind] || html.text);
+    handleEditorInput(); setSlashOpen(false);
+  };
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection();
+    if (event.key === "/" && !selection?.toString() && !selection?.anchorNode?.textContent?.trim()) { event.preventDefault(); setSlashOpen(true); }
+    if (event.key === "Escape") setSlashOpen(false);
+  };
+  const downloadFile = (name: string, content: string, type: string) => {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
+  };
+  const exportHtml = () => {
+    if (!selected) return;
+    const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(draftTitle) + '</title></head><body><h1>' + escapeHtml(draftTitle) + '</h1>' + sanitizeNoteHtml(draftHtml) + '</body></html>';
+    downloadFile((draftTitle || "pios-note") + ".html", html, "text/html"); setMoreOpen(false);
+  };
+  const exportPdf = () => {
+    if (!selected) return;
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) { onToast("Allow pop-ups to export as PDF."); return; }
+    win.document.write('<!doctype html><html><head><title>' + escapeHtml(draftTitle) + '</title><style>body{font:16px/1.7 Arial,sans-serif;max-width:780px;margin:56px auto;padding:0 28px;color:#1b2a24}</style></head><body><h1>' + escapeHtml(draftTitle) + '</h1>' + sanitizeNoteHtml(draftHtml) + '</body></html>');
+    win.document.close(); win.focus(); win.print(); setMoreOpen(false);
+  };
+  const duplicateNote = () => {
+    if (!selected) return;
+    const copy: PiosNote = { ...selected, id: crypto.randomUUID(), title: selected.title + " (copy)", pinned: false, archived: false, updatedAt: "Just now", order: Date.now() };
+    onNotesChange([copy, ...notes]); setSelectedId(copy.id); setMoreOpen(false); onToast("Note duplicated.");
+  };
+  const deletePermanently = () => {
+    if (!selected || !window.confirm('Permanently delete "' + selected.title + '"? This cannot be undone.')) return;
+    onNotesChange(notes.filter((note) => note.id !== selected.id)); setSelectedId(null); setMoreOpen(false); onToast("Note permanently deleted.");
+  };
+  const toggleFullscreen = async () => {
+    if (!editorPaneRef.current) return;
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else await editorPaneRef.current.requestFullscreen(); }
+    catch { onToast("Fullscreen is not available in this browser."); }
+  };
 
   const toggleArchive = () => { if (!selected) return; updateNote(selected.id, { archived: !selected.archived }); setSelectedId(null); onToast(selected.archived ? "Note restored." : "Note archived. You can find it under Archived."); };
   const togglePin = () => { if (!selected) return; updateNote(selected.id, { pinned: !selected.pinned }); onToast(selected.pinned ? "Note unpinned." : "Note pinned."); };
@@ -263,11 +308,11 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
 
     <section className="note-editor-pane">
       {selected ? <>
-        <div className="note-editor-toolbar-top"><div><span className="saved-indicator"><i/> Account storage</span><span className="editor-updated">Edited {selected.updatedAt.toLowerCase()}</span></div><div className="note-editor-actions"><button className={`icon-button ${selected.pinned ? "pinned" : ""}`} title={selected.pinned ? "Unpin note" : "Pin note"} onClick={togglePin}><Icon name="pin" size={16}/></button><button className="icon-button" title={selected.archived ? "Restore note" : "Archive note"} onClick={toggleArchive}><Icon name="archive" size={16}/></button><button className="icon-button" title="More note actions" onClick={() => onToast("Export and delete actions will be added with the note service.")}><Icon name="more" size={17}/></button></div></div>
+        <div className="note-editor-toolbar-top"><div><span className="saved-indicator"><i/> Account storage</span><span className="editor-updated">Edited {selected.updatedAt.toLowerCase()}</span></div><div className="note-editor-actions"><button className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><Icon name="x" size={16}/></button><button className="icon-button" title="Minimise" onClick={() => setMinimized(true)}><Icon name="minus" size={16}/></button><button className="icon-button" title="Full screen" onClick={toggleFullscreen}>⛶</button><button className={`icon-button ${selected.pinned ? "pinned" : ""}`} title={selected.pinned ? "Unpin note" : "Pin note"} onClick={togglePin}><Icon name="pin" size={16}/></button><button className="icon-button" title={selected.archived ? "Restore note" : "Archive note"} onClick={toggleArchive}><Icon name="archive" size={16}/></button><div className="note-more-wrap"><button className="icon-button" title="More actions" aria-expanded={moreOpen} onClick={() => setMoreOpen(v => !v)}><Icon name="more" size={17}/></button>{moreOpen && <div className="note-more-menu"><button className="danger" onClick={deletePermanently}><Icon name="trash" size={15}/>Delete permanently</button><button onClick={duplicateNote}><Icon name="file-plus" size={15}/>Duplicate note</button><button onClick={exportHtml}><Icon name="braces" size={15}/>Export HTML</button><button onClick={exportPdf}><Icon name="file" size={15}/>Export PDF</button></div>}</div></div></div>
         <div className="note-editor-content">
           <input className="note-editor-title" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Untitled note" aria-label="Note title"/>
           <div className="note-editor-meta"><span><Icon name="folder" size={13}/>{folders.find((folder) => folder.id === selected.folderId)?.name ?? "Inbox"}</span><span><Icon name="clock" size={13}/>{selected.updatedAt}</span></div>
-          <div className="rich-toolbar" role="toolbar" aria-label="Text formatting">
+          <div className="rich-toolbar floating-rich-toolbar" role="toolbar" aria-label="Text formatting">
             <button type="button" title="Bold (Ctrl+B)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("bold")}><b>B</b></button>
             <button type="button" title="Italic (Ctrl+I)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("italic")}><i>I</i></button>
             <button type="button" title="Underline (Ctrl+U)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("underline")}><u>U</u></button>
@@ -278,7 +323,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <button type="button" title="Checklist" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={insertChecklist}><Icon name="list-checks" size={15}/></button>
             <button type="button" title="Add link" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { const url = window.prompt("Enter link URL"); if (url) format("createLink", url); }}><Icon name="link" size={15}/></button>
           </div>
-          <div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} data-placeholder="Start writing..." />
+          <div className="note-editor-body-wrap"><div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyDown={handleEditorKeyDown} data-placeholder="Type / for commands, or start writing..." />{slashOpen && <div className="slash-command-menu">{[["text","Text"],["h1","Heading 1"],["h2","Heading 2"],["bullet","Bulleted list"],["number","Numbered list"],["todo","To-do list"],["quote","Quote"],["divider","Divider"]].map(([key,label]) => <button key={key} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertBlock(key)}>{label}</button>)}</div>}</div>
           <div className="note-editor-footer"><div className="note-color-picker">{colors.map((color) => <button key={color.id} type="button" title={color.name} aria-label={color.name} className={`note-color-dot ${color.id} ${draftColor === color.id ? "selected" : ""}`} onClick={() => setDraftColor(color.id)}/>)}</div><span>{plainTextFromHtml(draftHtml).trim().split(/\s+/).filter(Boolean).length} words</span><button className="button button-primary button-small" onClick={saveDraft}><Icon name="check" size={14}/>Save changes</button></div>
           <div className="note-routing-toggle"><button onClick={() => setShowDestination((value) => !value)}><Icon name="sparkles" size={14}/> Organise this note with PIOS <Icon name="chevron-down" size={13}/></button></div>
           {showDestination && <NoteDestination title={draftTitle} body={plainTextFromHtml(draftHtml)} folders={folders} notes={notes} folderId={currentFolderId} excludeId={selected.id} onFolderChange={(folderId) => updateNote(selected.id, { folderId })} onFoldersChange={onFoldersChange}/>}
