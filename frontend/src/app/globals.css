@@ -500,3 +500,6 @@ kbd { border: 1px solid #e5eae6; border-radius: 4px; background: #fff; padding: 
 .ask-pios-fab{position:sticky;bottom:16px;float:right;display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:0;border-radius:24px;background:#236f58;color:#fff;font-size:10px;font-weight:700;box-shadow:0 6px 18px rgba(35,111,88,.22)}
 .ask-pios-panel{position:sticky;bottom:62px;float:right;clear:right;width:260px;padding:13px;border:1px solid #e1eae3;border-radius:12px;background:#fff;box-shadow:0 12px 32px rgba(30,50,40,.14);z-index:40}
 .ask-pios-panel strong{font-size:12px;color:#294237}.ask-pios-panel p{font-size:10px;color:#87958b;line-height:1.5}.ask-pios-panel textarea{width:100%;resize:vertical;border:1px solid #e2eae3;border-radius:8px;padding:8px;font-size:10px;margin-bottom:8px}
+.ask-pios-answer{margin-top:9px;padding:9px;border-radius:8px;background:#f4f8f5;color:#42584b;font-size:10px;line-height:1.6;white-space:pre-wrap;max-height:240px;overflow:auto}
+.note-cover button+button{left:auto;right:16px}
+.floating-rich-toolbar [data-toolbar-handle]{user-select:none;color:#8a9990;font-size:15px}
