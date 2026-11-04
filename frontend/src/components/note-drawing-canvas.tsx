@@ -1,13 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, exportToBlob } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
+
+export type ExportedNoteDiagram = {
+  sceneData: string;
+  previewDataUrl: string;
+};
+
+type ExcalidrawApiHandle = {
+  getSceneElements: () => unknown[];
+  getAppState: () => Record<string, unknown>;
+  getFiles: () => Record<string, unknown>;
+};
 
 type NoteDrawingCanvasProps = {
   sceneData: string;
-  onSceneChange: (scene: string) => void;
-  onRegisterSceneReader: (reader: () => string) => void;
+  onRegisterSceneExporter: (exporter: () => Promise<ExportedNoteDiagram>) => void;
 };
 
 function restoreScene(sceneData: string) {
@@ -25,23 +35,62 @@ function restoreScene(sceneData: string) {
   }
 }
 
-export default function NoteDrawingCanvas({ sceneData, onSceneChange, onRegisterSceneReader }: NoteDrawingCanvasProps) {
-  // The parent keys this component by note id, so this initial scene is read once per note.
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not create the diagram preview."));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      if (!result.startsWith("data:image/png;base64,")) {
+        reject(new Error("The diagram preview could not be encoded as PNG."));
+        return;
+      }
+      resolve(result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+export default function NoteDrawingCanvas({ sceneData, onRegisterSceneExporter }: NoteDrawingCanvasProps) {
   const initialData = useRef(restoreScene(sceneData));
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestScene = useRef(sceneData);
-  const onSceneChangeRef = useRef(onSceneChange);
+  const apiRef = useRef<ExcalidrawApiHandle | null>(null);
+  const registerRef = useRef(onRegisterSceneExporter);
 
   useEffect(() => {
-    onSceneChangeRef.current = onSceneChange;
-  }, [onSceneChange]);
+    registerRef.current = onRegisterSceneExporter;
+  }, [onRegisterSceneExporter]);
 
   useEffect(() => {
-    onRegisterSceneReader(() => latestScene.current);
-  }, [onRegisterSceneReader]);
+    const exporter = async (): Promise<ExportedNoteDiagram> => {
+      const api = apiRef.current;
+      if (!api) throw new Error("The drawing canvas is still loading.");
+      const elements = api.getSceneElements();
+      if (!elements.length) throw new Error("Draw something before inserting this diagram.");
+      const appState = api.getAppState();
+      const files = api.getFiles();
+      const sceneData = JSON.stringify({
+        format: "pios-excalidraw-v1",
+        elements,
+        appState: {
+          viewBackgroundColor: appState.viewBackgroundColor,
+          gridSize: appState.gridSize,
+          theme: appState.theme,
+        },
+        files,
+      });
+      const blob = await exportToBlob({
+        elements: elements as never,
+        appState: { ...appState, exportBackground: false } as never,
+        files: files as never,
+        mimeType: "image/png",
+        maxWidthOrHeight: 1600,
+        exportPadding: 24,
+      });
+      return { sceneData, previewDataUrl: await blobToDataUrl(blob) };
+    };
 
-  useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+    registerRef.current(exporter);
+    return () => registerRef.current(() => Promise.reject(new Error("The drawing canvas is closed.")));
   }, []);
 
   return (
@@ -50,22 +99,8 @@ export default function NoteDrawingCanvas({ sceneData, onSceneChange, onRegister
         <Excalidraw
           initialData={initialData.current as never}
           theme="light"
-          onChange={(elements, appState, files) => {
-            latestScene.current = JSON.stringify({
-              format: "pios-excalidraw-v1",
-              elements,
-              appState: {
-                viewBackgroundColor: appState.viewBackgroundColor,
-                gridSize: appState.gridSize,
-                theme: appState.theme,
-              },
-              files,
-            });
-            if (saveTimer.current) clearTimeout(saveTimer.current);
-            saveTimer.current = setTimeout(() => {
-              if (latestScene.current) onSceneChangeRef.current(latestScene.current);
-              saveTimer.current = null;
-            }, 400);
+          excalidrawAPI={(api) => {
+            apiRef.current = api as unknown as ExcalidrawApiHandle;
           }}
         />
       </div>
