@@ -2,7 +2,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080
 const TOKEN_KEY = "pios-access-token-v1";
 
 export type ApiUser = { id: string; email: string; displayName: string; createdAt: string };
-export type AuthResult = { accessToken: string; tokenType: string; expiresInSeconds: number; user: { id: string; email: string; displayName: string } };
+type SessionUser = { id: string; email: string; displayName: string };
 export type ApiFolder = { id: string; name: string; color: string };
 export type ApiNote = {
   id: string; title: string; bodyHtml: string; plainText: string; folderId: string | null;
@@ -29,32 +29,43 @@ export type ApiChatResponse = {
 
 type RequestOptions = RequestInit & { skipAuth?: boolean };
 
-export function getToken() {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-export function saveToken(token: string) {
-  window.localStorage.setItem(TOKEN_KEY, token);
-}
+let csrfRequest: Promise<{ headerName: string; token: string }> | undefined;
+
+// Remove credentials saved by earlier versions; browser authentication now uses an HttpOnly cookie.
 export function clearToken() {
-  window.localStorage.removeItem(TOKEN_KEY);
+  if (typeof window !== "undefined") window.localStorage.removeItem(TOKEN_KEY);
+  csrfRequest = undefined;
+}
+
+function getCsrfToken() {
+  csrfRequest ??= fetch(`${API_BASE}/auth/csrf`, { credentials: "include", cache: "no-store" })
+    .then(async (response) => {
+      if (!response.ok) throw new Error("Could not prepare a secure request. Please try again.");
+      return await response.json() as { headerName: string; token: string };
+    }).catch((error) => { csrfRequest = undefined; throw error; });
+  return csrfRequest;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
-  if (!options.skipAuth) {
-    const token = getToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (!["GET", "HEAD", "OPTIONS"].includes((options.method || "GET").toUpperCase())) {
+    const csrf = await getCsrfToken();
+    headers.set(csrf.headerName, csrf.token);
   }
   if (!(options.body instanceof FormData) && options.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
+  const { skipAuth, ...requestOptions } = options;
+  const response = await fetch(`${API_BASE}${path}`, { ...requestOptions, headers, credentials: "include", cache: "no-store" });
   const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
   if (!response.ok) {
     const message = payload?.message || payload?.detail || payload?.error || `Request failed (${response.status}).`;
-    if (response.status === 401 && !options.skipAuth) clearToken();
+    if (response.status === 403) csrfRequest = undefined;
+    if (response.status === 401 && !skipAuth) {
+      clearToken();
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("pios-session-expired"));
+    }
     throw new Error(message);
   }
   if (response.status === 204) return undefined as T;
@@ -62,22 +73,27 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 }
 
 export async function signIn(email: string, password: string) {
-  const result = await apiRequest<AuthResult>("/auth/login", {
+  const result = await apiRequest<SessionUser>("/auth/session/login", {
     method: "POST", skipAuth: true, body: JSON.stringify({ email, password }),
   });
-  saveToken(result.accessToken);
-  return result.user;
+  clearToken();
+  return result;
 }
 
 export async function signUp(displayName: string, email: string, password: string) {
-  const result = await apiRequest<AuthResult>("/auth/register", {
+  const result = await apiRequest<SessionUser>("/auth/session/register", {
     method: "POST", skipAuth: true, body: JSON.stringify({ displayName, email, password }),
   });
-  saveToken(result.accessToken);
-  return result.user;
+  clearToken();
+  return result;
 }
 
-export const getMe = () => apiRequest<ApiUser>("/users/me");
+export async function signOut() {
+  await apiRequest<void>("/auth/logout", { method: "POST" });
+  clearToken();
+}
+
+export const getMe = (checkingSession = false) => apiRequest<ApiUser>("/users/me", { skipAuth: checkingSession });
 export const getFolders = () => apiRequest<ApiFolder[]>("/folders");
 export const createFolder = (name: string, color = "#7e9b8b", id?: string) => apiRequest<ApiFolder>("/folders", { method: "POST", body: JSON.stringify({ id, name, color }) });
 export const deleteFolder = (id: string) => apiRequest<void>(`/folders/${id}`, { method: "DELETE" });

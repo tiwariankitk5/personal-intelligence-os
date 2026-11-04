@@ -10,7 +10,7 @@ import {
   ApiChatResponse, ApiFolder, ApiNote, ApiObjective, ApiProvider, ApiSource, ApiUser,
   clearToken, createFolder, createNote, createObjective, createTextSource, deleteObjective,
   getFolders, getMe, getNotes, getObjectives, getProviders, getSources, removeNote,
-  removeSource, sendChat, signIn, signUp, updateNote, updateObjectiveProgress, uploadSource,
+  removeSource, sendChat, signIn, signUp, signOut, updateNote, updateObjectiveProgress, uploadSource,
 } from "@/lib/api";
 
 type View = "overview" | "notes" | "knowledge" | "assistant" | "learning" | "ai" | "graph" | "settings";
@@ -102,13 +102,24 @@ export default function PiosConnectedApp() {
   }, [notify]);
 
   useEffect(() => {
-    const token = window.localStorage.getItem("pios-access-token-v1");
-    if (!token) { setAuthChecking(false); return; }
-    setTokenExists(true);
-    getMe().then((me) => { setUser(me); return loadWorkspace(); })
-      .catch((error) => { clearToken(); setTokenExists(false); setUser(null); setAuthError(error instanceof Error ? error.message : "Session expired. Sign in again."); })
+    clearToken();
+    getMe(true).then((me) => { setUser(me); setTokenExists(true); return loadWorkspace(); })
+      .catch(() => { setTokenExists(false); setUser(null); })
       .finally(() => setAuthChecking(false));
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    const expired = () => {
+      setUser(null); setTokenExists(false); setAuthMode("login");
+      setAuthError("Your session has expired. Sign in again to continue.");
+      setNotes([]); setFolders([]); setSources([]); setObjectives([]); setProviders([]);
+      notesRef.current = []; foldersRef.current = [];
+      setChatEntries([]); setConversationId(undefined);
+      setQuickCaptureOpen(false); setAddSourceOpen(false); setShowSearch(false);
+    };
+    window.addEventListener("pios-session-expired", expired);
+    return () => window.removeEventListener("pios-session-expired", expired);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -242,7 +253,16 @@ export default function PiosConnectedApp() {
 
   async function refreshProviders() { try { setProviders(await getProviders()); } catch { /* provider view displays its own error */ } }
 
-  function logout() { clearToken(); setUser(null); setTokenExists(false); setFolders([]); setNotes([]); setSources([]); setObjectives([]); setProviders([]); setChatEntries([]); setConversationId(undefined); }
+  async function logout() {
+    try {
+      await signOut();
+      setUser(null); setTokenExists(false); setAuthMode("login");
+      setFolders([]); setNotes([]); setSources([]); setObjectives([]); setProviders([]);
+      notesRef.current = []; foldersRef.current = [];
+      setChatEntries([]); setConversationId(undefined);
+      setQuickCaptureOpen(false); setAddSourceOpen(false); setShowSearch(false);
+    } catch (error) { notify(error instanceof Error ? error.message : "Could not sign out. Please try again."); }
+  }
 
   const filteredSources = useMemo(() => {
     const q = knowledgeQuery.toLowerCase().trim();

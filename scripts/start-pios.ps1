@@ -53,11 +53,18 @@ Write-Host "Building and starting PIOS containers. First run downloads dependenc
 docker compose up --build -d
 if ($LASTEXITCODE -ne 0) { throw "Docker Compose failed. Inspect with: docker compose logs --tail=150" }
 
+$backendBinding = (docker compose port backend 8080 | Select-Object -First 1)
+$frontendBinding = (docker compose port frontend 3000 | Select-Object -First 1)
+if ($backendBinding -notmatch ':(\d+)$') { throw "Could not determine the backend port." }
+$backendUrl = "http://localhost:$($Matches[1])"
+if ($frontendBinding -notmatch ':(\d+)$') { throw "Could not determine the frontend port." }
+$frontendUrl = "http://localhost:$($Matches[1])"
+
 Write-Host "Waiting for the backend health endpoint..." -ForegroundColor Cyan
 $ready = $false
 for ($i = 0; $i -lt 60; $i++) {
     try {
-        $response = Invoke-WebRequest -Uri "http://localhost:8080/actuator/health" -TimeoutSec 3 -UseBasicParsing
+        $response = Invoke-WebRequest -Uri "$backendUrl/actuator/health" -TimeoutSec 3 -UseBasicParsing
         if ($response.StatusCode -eq 200) { $ready = $true; break }
         Start-Sleep -Seconds 2
     } catch { Start-Sleep -Seconds 2 }
@@ -73,7 +80,7 @@ Write-Host "Waiting for the frontend..." -ForegroundColor Cyan
 $frontendReady = $false
 for ($i = 0; $i -lt 60; $i++) {
     try {
-        $response = Invoke-WebRequest -Uri "http://localhost:3000" -TimeoutSec 3 -UseBasicParsing
+        $response = Invoke-WebRequest -Uri $frontendUrl -TimeoutSec 3 -UseBasicParsing
         if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) { $frontendReady = $true; break }
         Start-Sleep -Seconds 2
     } catch { Start-Sleep -Seconds 2 }
@@ -85,6 +92,6 @@ if (-not $frontendReady) {
 }
 
 Write-Host "PIOS is ready." -ForegroundColor Green
-Write-Host "Frontend: http://localhost:3000"
-Write-Host "Backend:  http://localhost:8080/actuator/health"
-if (-not $SkipBrowser) { Start-Process "http://localhost:3000" }
+Write-Host "Frontend: $frontendUrl"
+Write-Host "Backend:  $backendUrl/actuator/health"
+if (-not $SkipBrowser) { Start-Process $frontendUrl }
