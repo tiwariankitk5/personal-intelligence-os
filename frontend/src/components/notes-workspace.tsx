@@ -413,7 +413,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     {drawingOpen && selected && <div className="pios-design-studio-overlay" role="dialog" aria-modal="true" aria-label="Design tools">
       <section className="pios-design-studio">
         <header className="pios-design-studio-header">
-          <div><span className="pios-design-studio-eyebrow">PIOS DESIGN TOOLS</span><h2>{draftTitle || selected.title}</h2><p>Sketch, map, annotate and design independently from your typed note.</p></div>
+          <div><span className="pios-design-studio-eyebrow">PIOS DESIGN TOOLS</span><h2>{draftTitle || selected.title}</h2><p>Sketch, map, annotate and design independently from your typed note.</p><small className="pios-design-studio-tip">Image crop: select an image, then double-click it or press Enter. Adjust the crop handles and press Enter to apply.</small></div>
           <button type="button" className="icon-button" aria-label="Close design tools" onClick={cancelDrawing}><Icon name="x" size={18}/></button>
         </header>
         <div className="pios-design-studio-canvas">
