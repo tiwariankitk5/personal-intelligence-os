@@ -204,6 +204,8 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const editorCursorRangeRef = useRef<Range | null>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
+  const diagramStore = readDiagramStore(inkData);
+  const savedDiagramCount = diagramStore.diagrams.length + (diagramStore.legacyScene ? 1 : 0);
   const inboxFolderId = folders.find((folder) => folder.name.trim().toLowerCase() === "inbox")?.id ?? "inbox";
   useEffect(() => {
     const handleNotesShortcuts = (event: KeyboardEvent) => {
@@ -512,6 +514,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <button type="button" title="Numbered list" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("insertOrderedList")}><Icon name="list-ordered" size={15}/></button>
             <button type="button" title="Checklist" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={insertChecklist}><Icon name="list-checks" size={15}/></button>
             <button type="button" title="Add link" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { const url = window.prompt("Enter link URL"); if (url) format("createLink", url); }}><Icon name="link" size={15}/></button>
+            <button type="button" title="Insert diagram at cursor" onMouseDown={rememberEditorCursor} onClick={openNewDiagram}><Icon name="pencil-ruler" size={15}/></button>
           </div>
           <div className="note-editor-body-wrap"><div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyDown={handleEditorKeyDown} onDoubleClick={openExistingDiagram} data-placeholder="Type / for commands, or start writing..." />{slashOpen && <div className="slash-command-menu">{[["text","Text"],["h1","Heading 1"],["h2","Heading 2"],["bullet","Bulleted list"],["number","Numbered list"],["todo","To-do list"],["quote","Quote"],["divider","Divider"]].map(([key,label]) => <button key={key} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertBlock(key)}>{label}</button>)}</div>}</div>
           <section className="note-design-tools">
@@ -519,7 +522,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <div className="note-design-tools-copy">
               <strong>Design tools</strong>
               <span>Insert a tightly cropped, editable diagram exactly where your text cursor is placed.</span>
-              <small>{readDiagramStore(inkData).diagrams.length} saved diagram{readDiagramStore(inkData).diagrams.length === 1 ? "" : "s"} · Double-click a diagram to edit it.</small>
+              <small>{savedDiagramCount} saved diagram{savedDiagramCount === 1 ? "" : "s"} · Double-click a diagram to edit it.</small>
             </div>
             <button type="button" className="button button-secondary button-small" onMouseDown={rememberEditorCursor} onClick={openNewDiagram}>Insert diagram</button>
           </section>
