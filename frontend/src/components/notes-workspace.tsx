@@ -11,7 +11,7 @@ import { sendChat } from "@/lib/api";
 type NotesWorkspaceProps = {
   notes: PiosNote[];
   folders: NoteFolder[];
-  onNotesChange: (notes: PiosNote[]) => void;
+  onNotesChange: (notes: PiosNote[]) => void | Promise<void>;
   onFoldersChange: (folders: NoteFolder[]) => void;
   onQuickCapture: () => void;
   onToast: (message: string) => void;
@@ -164,6 +164,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [minimized, setMinimized] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
+  const [drawingOpen, setDrawingOpen] = useState(false);
   const [askText, setAskText] = useState("");
   const [askAnswer, setAskAnswer] = useState("");
   const [askBusy, setAskBusy] = useState(false);
@@ -223,8 +224,24 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     if (!selected) return;
     const body = plainTextFromHtml(draftHtml);
     const latestInkData = drawingSceneReaderRef.current?.() ?? inkData;
+    drawingSceneReaderRef.current = null;
     updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: draftHtml, plainText: body, color: draftColor, inkData: latestInkData, coverUrl, updatedAt: "Just now", order: Date.now() });
     onToast("Note saved to your PIOS account.");
+  };
+  const saveDrawing = async () => {
+    if (!selected) return;
+    const latestInkData = drawingSceneReaderRef.current?.() ?? inkData;
+    const updated = { ...selected, inkData: latestInkData, updatedAt: "Just now", order: Date.now() };
+    drawingSceneReaderRef.current = null;
+    await onNotesChange(notes.map((note) => note.id === selected.id ? updated : note));
+    setInkData(latestInkData);
+    setDrawingOpen(false);
+    onToast("Drawing saved to this note.");
+  };
+  const cancelDrawing = () => {
+    if (selected) setInkData(selected.inkData ?? "");
+    drawingSceneReaderRef.current = null;
+    setDrawingOpen(false);
   };
   const createFolder = (event: FormEvent) => {
     event.preventDefault();
@@ -375,7 +392,15 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <button type="button" title="Add link" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { const url = window.prompt("Enter link URL"); if (url) format("createLink", url); }}><Icon name="link" size={15}/></button>
           </div>
           <div className="note-editor-body-wrap"><div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyDown={handleEditorKeyDown} data-placeholder="Type / for commands, or start writing..." />{slashOpen && <div className="slash-command-menu">{[["text","Text"],["h1","Heading 1"],["h2","Heading 2"],["bullet","Bulleted list"],["number","Numbered list"],["todo","To-do list"],["quote","Quote"],["divider","Divider"]].map(([key,label]) => <button key={key} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertBlock(key)}>{label}</button>)}</div>}</div>
-          <NoteDrawingCanvas key={selected.id} sceneData={inkData} onSceneChange={setInkData} onRegisterSceneReader={(reader) => { drawingSceneReaderRef.current = reader; }} />
+          <section className="note-design-tools">
+            <div className="note-design-tools-icon" aria-hidden="true">✎</div>
+            <div className="note-design-tools-copy">
+              <strong>Design tools</strong>
+              <span>Open a separate drawing workspace for sketches, diagrams, shapes and visual thinking.</span>
+              <small>{inkData ? "This note has a saved drawing." : "No drawing saved yet."}</small>
+            </div>
+            <button type="button" className="button button-secondary button-small" onClick={() => setDrawingOpen(true)}>Open design tools</button>
+          </section>
           <button type="button" className="ask-pios-fab" onClick={() => setAskOpen(!askOpen)}><Icon name="sparkles" size={15}/> Ask PIOS</button>
           {askOpen && <div className="ask-pios-panel"><strong>Ask PIOS</strong><p>Ask about this note or turn it into a learning resource.</p><textarea value={askText} onChange={(event) => setAskText(event.target.value)} placeholder="Ask something about this page..." rows={3}/><button className="button button-primary button-small" disabled={!askText.trim() || askBusy} onClick={() => void askPios()}>{askBusy ? "Thinking…" : "Ask"}</button>{askAnswer && <div className="ask-pios-answer" role="status">{askAnswer}</div>}</div>}
           <div className="note-editor-footer"><div className="note-color-picker">{colors.map((color) => <button key={color.id} type="button" title={color.name} aria-label={color.name} className={`note-color-dot ${color.id} ${draftColor === color.id ? "selected" : ""}`} onClick={() => setDraftColor(color.id)}/>)}</div><span>{plainTextFromHtml(draftHtml).trim().split(/\s+/).filter(Boolean).length} words</span><button className="button button-primary button-small" onClick={saveDraft}><Icon name="check" size={14}/>Save changes</button></div>
@@ -385,6 +410,21 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       </> : <div className="note-editor-empty"><div><Icon name="sticky-note" size={27}/></div><h3>Select a note</h3><p>Choose a note from the list or create a new one to start writing.</p><button className="button button-primary button-small" onClick={onQuickCapture}><Icon name="plus" size={14}/>Create note</button></div>}
     </section>
 
+    {drawingOpen && selected && <div className="pios-design-studio-overlay" role="dialog" aria-modal="true" aria-label="Design tools">
+      <section className="pios-design-studio">
+        <header className="pios-design-studio-header">
+          <div><span className="pios-design-studio-eyebrow">PIOS DESIGN TOOLS</span><h2>{draftTitle || selected.title}</h2><p>Sketch, map, annotate and design independently from your typed note.</p></div>
+          <button type="button" className="icon-button" aria-label="Close design tools" onClick={cancelDrawing}><Icon name="x" size={18}/></button>
+        </header>
+        <div className="pios-design-studio-canvas">
+          <NoteDrawingCanvas key={selected.id} sceneData={inkData} onSceneChange={setInkData} onRegisterSceneReader={(reader) => { drawingSceneReaderRef.current = reader; }} />
+        </div>
+        <footer className="pios-design-studio-footer">
+          <span>Saved drawings stay attached to this note. Text edits are saved separately.</span>
+          <div><button type="button" className="button button-secondary" onClick={cancelDrawing}>Cancel</button><button type="button" className="button button-primary" onClick={() => void saveDrawing()}><Icon name="check" size={15}/>Save drawing</button></div>
+        </footer>
+      </section>
+    </div>}
     {folderDialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setFolderDialog(false); }}><form className="modal new-folder-modal" onSubmit={createFolder}><div className="modal-header"><div><div className="eyebrow">ORGANISE YOUR KNOWLEDGE</div><h2>Create a folder</h2><p>Folders keep related notes together.</p></div><button className="icon-button" type="button" onClick={() => setFolderDialog(false)}><Icon name="x"/></button></div><label htmlFor="folder-name">Folder name</label><input id="folder-name" autoFocus value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="e.g. Java Concurrency"/><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setFolderDialog(false)}>Cancel</button><button type="submit" className="button button-primary" disabled={!folderName.trim()}><Icon name="plus" size={14}/>Create folder</button></div></form></div>}
   </div>;
 }
