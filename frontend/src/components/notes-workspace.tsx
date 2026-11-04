@@ -156,6 +156,8 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [moreOpen, setMoreOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
+  const [drawingTool, setDrawingTool] = useState("select");
+  const [askOpen, setAskOpen] = useState(false);
   const editorPaneRef = useRef<HTMLElement>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
