@@ -752,3 +752,35 @@ kbd { border: 1px solid #e5eae6; border-radius: 4px; background: #fff; padding: 
   font-size: 10px;
   line-height: 1.5;
 }
+
+
+/* Editable diagram previews inserted at the rich-text cursor */
+.note-rich-editor img.pios-inline-diagram {
+  display: block;
+  width: auto;
+  max-width: min(100%, 960px);
+  max-height: 760px;
+  height: auto;
+  object-fit: contain;
+  margin: 16px 0;
+  border: 1px solid #e5ebe6;
+  border-radius: 8px;
+  background-color: transparent;
+  cursor: zoom-in;
+  user-select: none;
+}
+.note-rich-editor img.pios-inline-diagram:hover {
+  outline: 2px solid rgba(54, 126, 82, .24);
+  outline-offset: 3px;
+}
+.note-rich-editor img.pios-inline-diagram:focus {
+  outline: 2px solid #74a987;
+  outline-offset: 3px;
+}
+.pios-design-studio-tip {
+  display: block;
+  margin-top: 5px;
+  color: #6e8977;
+  font-size: 10px;
+  line-height: 1.5;
+}
