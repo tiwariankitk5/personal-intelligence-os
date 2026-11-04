@@ -174,6 +174,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [coverUrl, setCoverUrl] = useState("");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const editorPaneRef = useRef<HTMLElement>(null);
+  const drawingSceneReaderRef = useRef<(() => string) | null>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
   const inboxFolderId = folders.find((folder) => folder.name.trim().toLowerCase() === "inbox")?.id ?? "inbox";
@@ -221,7 +222,8 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const saveDraft = () => {
     if (!selected) return;
     const body = plainTextFromHtml(draftHtml);
-    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: draftHtml, plainText: body, color: draftColor, inkData, coverUrl, updatedAt: "Just now", order: Date.now() });
+    const latestInkData = drawingSceneReaderRef.current?.() ?? inkData;
+    updateNote(selected.id, { title: draftTitle.trim() || "Untitled note", bodyHtml: draftHtml, plainText: body, color: draftColor, inkData: latestInkData, coverUrl, updatedAt: "Just now", order: Date.now() });
     onToast("Note saved to your PIOS account.");
   };
   const createFolder = (event: FormEvent) => {
@@ -373,7 +375,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
             <button type="button" title="Add link" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => { const url = window.prompt("Enter link URL"); if (url) format("createLink", url); }}><Icon name="link" size={15}/></button>
           </div>
           <div className="note-editor-body-wrap"><div ref={editorRef} className="note-rich-editor" contentEditable suppressContentEditableWarning onInput={handleEditorInput} onKeyDown={handleEditorKeyDown} data-placeholder="Type / for commands, or start writing..." />{slashOpen && <div className="slash-command-menu">{[["text","Text"],["h1","Heading 1"],["h2","Heading 2"],["bullet","Bulleted list"],["number","Numbered list"],["todo","To-do list"],["quote","Quote"],["divider","Divider"]].map(([key,label]) => <button key={key} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => insertBlock(key)}>{label}</button>)}</div>}</div>
-          <NoteDrawingCanvas key={selected.id} sceneData={inkData} onSceneChange={setInkData} />
+          <NoteDrawingCanvas key={selected.id} sceneData={inkData} onSceneChange={setInkData} onRegisterSceneReader={(reader) => { drawingSceneReaderRef.current = reader; }} />
           <button type="button" className="ask-pios-fab" onClick={() => setAskOpen(!askOpen)}><Icon name="sparkles" size={15}/> Ask PIOS</button>
           {askOpen && <div className="ask-pios-panel"><strong>Ask PIOS</strong><p>Ask about this note or turn it into a learning resource.</p><textarea value={askText} onChange={(event) => setAskText(event.target.value)} placeholder="Ask something about this page..." rows={3}/><button className="button button-primary button-small" disabled={!askText.trim() || askBusy} onClick={() => void askPios()}>{askBusy ? "Thinking…" : "Ask"}</button>{askAnswer && <div className="ask-pios-answer" role="status">{askAnswer}</div>}</div>}
           <div className="note-editor-footer"><div className="note-color-picker">{colors.map((color) => <button key={color.id} type="button" title={color.name} aria-label={color.name} className={`note-color-dot ${color.id} ${draftColor === color.id ? "selected" : ""}`} onClick={() => setDraftColor(color.id)}/>)}</div><span>{plainTextFromHtml(draftHtml).trim().split(/\s+/).filter(Boolean).length} words</span><button className="button button-primary button-small" onClick={saveDraft}><Icon name="check" size={14}/>Save changes</button></div>
