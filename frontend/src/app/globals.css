@@ -492,3 +492,11 @@ kbd { border: 1px solid #e5eae6; border-radius: 4px; background: #fff; padding: 
 .note-rich-editor h3{font-size:1.35em;font-weight:650}
 .note-rich-editor blockquote{border-left:3px solid #9ab9a4;margin:12px 0;padding:4px 14px;color:#66756c}
 .note-rich-editor hr{border:0;border-top:1px solid #e4eae5;margin:20px 0}
+
+.note-drawing-toolbar{display:flex;align-items:center;gap:5px;margin:4px 0 14px;padding:7px;border:1px solid #e6ece7;border-radius:10px;background:#fbfdfb;width:max-content;max-width:100%}
+.note-drawing-toolbar button{display:grid;justify-items:center;gap:2px;min-width:43px;padding:5px 7px;border:0;border-radius:7px;background:transparent;color:#718078}
+.note-drawing-toolbar button.active,.note-drawing-toolbar button:hover{background:#eaf4ed;color:#277253}
+.note-drawing-toolbar button span{font-size:16px}.note-drawing-toolbar button small{font-size:8px;text-transform:capitalize}
+.ask-pios-fab{position:sticky;bottom:16px;float:right;display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:0;border-radius:24px;background:#236f58;color:#fff;font-size:10px;font-weight:700;box-shadow:0 6px 18px rgba(35,111,88,.22)}
+.ask-pios-panel{position:sticky;bottom:62px;float:right;clear:right;width:260px;padding:13px;border:1px solid #e1eae3;border-radius:12px;background:#fff;box-shadow:0 12px 32px rgba(30,50,40,.14);z-index:40}
+.ask-pios-panel strong{font-size:12px;color:#294237}.ask-pios-panel p{font-size:10px;color:#87958b;line-height:1.5}.ask-pios-panel textarea{width:100%;resize:vertical;border:1px solid #e2eae3;border-radius:8px;padding:8px;font-size:10px;margin-bottom:8px}
