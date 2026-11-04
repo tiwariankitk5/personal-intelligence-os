@@ -199,6 +199,9 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [slashMenu, setSlashMenu] = useState<{ query: string } | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const [drawingOpen, setDrawingOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
+  const [showNoteActions, setShowNoteActions] = useState(false);
   const savedEditorRangeRef = useRef<Range | null>(null);
 
   const selected = notes.find((note) => note.id === selectedId) ?? null;
@@ -213,6 +216,18 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     window.addEventListener("keydown", handleNotesShortcuts);
     return () => window.removeEventListener("keydown", handleNotesShortcuts);
   }, []);
+
+  useEffect(() => {
+    const handleEditorEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || slashMenu) return;
+      if (showNoteActions) { setShowNoteActions(false); return; }
+      if (drawingOpen) { setDrawingOpen(false); return; }
+      if (focusMode) { setFocusMode(false); return; }
+      if (editorOpen) setEditorOpen(false);
+    };
+    window.addEventListener("keydown", handleEditorEscape);
+    return () => window.removeEventListener("keydown", handleEditorEscape);
+  }, [slashMenu, showNoteActions, drawingOpen, focusMode, editorOpen]);
   useEffect(() => {
     if (!selectedId) {
       const firstActive = notes.find((note) => !note.archived);
@@ -380,10 +395,76 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
 
   const toggleArchive = () => { if (!selected) return; updateNote(selected.id, { archived: !selected.archived }); setSelectedId(null); onToast(selected.archived ? "Note restored." : "Note archived. You can find it under Archived."); };
   const togglePin = () => { if (!selected) return; updateNote(selected.id, { pinned: !selected.pinned }); onToast(selected.pinned ? "Note unpinned." : "Note pinned."); };
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setFocusMode(false);
+    setShowNoteActions(false);
+  };
+  const exportSelectedNote = () => {
+    if (!selected) return;
+    const title = draftTitle.trim() || selected.title;
+    const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 72) || "pios-note";
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>body{max-width:860px;margin:48px auto;padding:0 24px;font:16px/1.7 system-ui,sans-serif;color:#26372f}pre{overflow:auto;padding:16px;background:#f4f6f4;border-radius:8px}blockquote{border-left:3px solid #79a486;padding-left:16px;color:#607166}img,iframe{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #dce5dd;padding:8px 12px}</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+${sanitizeNoteHtml(draftHtml || selected.bodyHtml)}
+</body>
+</html>`;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeName}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setShowNoteActions(false);
+    onToast("HTML export downloaded.");
+  };
+  const duplicateSelectedNote = () => {
+    if (!selected) return;
+    const bodyHtml = sanitizeNoteHtml(draftHtml || selected.bodyHtml);
+    const duplicate: PiosNote = {
+      ...selected,
+      id: crypto.randomUUID(),
+      title: `${draftTitle.trim() || selected.title} (copy)`,
+      bodyHtml,
+      plainText: plainTextFromHtml(bodyHtml),
+      pinned: false,
+      archived: false,
+      updatedAt: "Just now",
+      order: Date.now(),
+    };
+    onNotesChange([duplicate, ...notes]);
+    setSelectedId(duplicate.id);
+    setDraftTitle(duplicate.title);
+    setDraftHtml(duplicate.bodyHtml);
+    setDraftColor(duplicate.color);
+    setEditorOpen(true);
+    setFocusMode(false);
+    setShowNoteActions(false);
+    onToast("Note duplicated.");
+  };
+  const deleteSelectedNote = () => {
+    if (!selected) return;
+    const title = draftTitle.trim() || selected.title;
+    if (!window.confirm(`Permanently delete "${title}"? This cannot be undone.`)) return;
+    onNotesChange(notes.filter((note) => note.id !== selected.id));
+    setSelectedId(null);
+    closeEditor();
+    onToast("Note deleted.");
+  };
   const folderTitle = selectedFolderId === "all" ? "All notes" : folders.find((folder) => folder.id === selectedFolderId)?.name ?? "Notes";
   const currentFolderId = selected?.folderId || inboxFolderId;
 
-  return <div className="notes-workspace">
+  return <div className={`notes-workspace${focusMode ? " focus-mode" : ""}${!editorOpen ? " editor-closed" : ""}`}>
     <aside className="notes-folder-pane">
       <div className="notes-pane-heading"><span>YOUR NOTES</span><button className="icon-button" onClick={onQuickCapture} aria-label="Create a note"><Icon name="plus" size={16}/></button></div>
       <button className={`notes-folder-row ${selectedFolderId === "all" ? "active" : ""}`} onClick={() => setSelectedFolderId("all")}><Icon name="layers" size={16}/><span>All notes</span><b>{notes.filter((note) => !note.archived).length}</b></button>
@@ -398,7 +479,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       <div className="notes-search"><Icon name="search" size={15}/><input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your notes..."/><kbd>⌘ F</kbd></div>
       <div className="notes-list-toolbar"><div className="notes-filter-tabs"><button className={filter === "active" ? "active" : ""} onClick={() => setFilter("active")}>All</button><button className={filter === "pinned" ? "active" : ""} onClick={() => setFilter("pinned")}>Pinned</button><button className={filter === "archived" ? "active" : ""} onClick={() => setFilter("archived")}>Archived</button></div><select aria-label="Sort notes" value={sort} onChange={(event) => setSort(event.target.value)}><option value="manual">My order</option><option value="recent">Recently updated</option><option value="oldest">Oldest</option><option value="title">Title</option></select></div>
       <div className="notes-card-list">
-        {visibleNotes.map((note) => <button key={note.id} draggable onDragStart={() => setDraggedId(note.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(note.id)} onDragEnd={() => setDraggedId(null)} className={`note-list-card ${note.color} ${selectedId === note.id ? "selected" : ""} ${draggedId === note.id ? "dragging" : ""}`} onClick={() => setSelectedId(note.id)}>
+        {visibleNotes.map((note) => <button key={note.id} draggable onDragStart={() => setDraggedId(note.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(note.id)} onDragEnd={() => setDraggedId(null)} className={`note-list-card ${note.color} ${selectedId === note.id ? "selected" : ""} ${draggedId === note.id ? "dragging" : ""}`} onClick={() => { setSelectedId(note.id); setEditorOpen(true); setFocusMode(false); setShowNoteActions(false); }}>
           <div className="note-list-card-top"><span>{note.pinned && <Icon name="pin" size={12}/>}<span>{folders.find((folder) => folder.id === note.folderId)?.name ?? "Inbox"}</span></span><span className="note-card-time">{note.updatedAt}</span></div>
           <strong>{note.title}</strong><p>{note.plainText || "No additional text"}</p>
           <div className="note-list-card-bottom"><span>{Math.max(1, Math.ceil(note.plainText.length / 240))} min read</span><span className="drag-handle" title="Drag to reorder"><Icon name="grip" size={14}/></span></div>
@@ -407,9 +488,23 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       </div>
     </section>
 
-    <section className="note-editor-pane">
+    {editorOpen && <section className="note-editor-pane">
       {selected ? <>
-        <div className="note-editor-toolbar-top"><div><span className="saved-indicator"><i/> Account storage</span><span className="editor-updated">Edited {selected.updatedAt.toLowerCase()}</span></div><div className="note-editor-actions"><button className={`icon-button ${selected.pinned ? "pinned" : ""}`} title={selected.pinned ? "Unpin note" : "Pin note"} onClick={togglePin}><Icon name="pin" size={16}/></button><button className="icon-button" title={selected.archived ? "Restore note" : "Archive note"} onClick={toggleArchive}><Icon name="archive" size={16}/></button><button className="icon-button" title="More note actions" onClick={() => onToast("Export and delete actions will be added with the note service.")}><Icon name="more" size={17}/></button></div></div>
+        <div className="note-editor-toolbar-top"><div><span className="saved-indicator"><i/> Account storage</span><span className="editor-updated">Edited {selected.updatedAt.toLowerCase()}</span></div><div className="note-editor-actions">
+          <button type="button" className="icon-button" title="Close note editor (Esc)" aria-label="Close note editor" onClick={closeEditor}><Icon name="x" size={16}/></button>
+          <button type="button" className="icon-button" title={focusMode ? "Exit full-screen editor" : "Open full-screen editor"} aria-label={focusMode ? "Exit full-screen editor" : "Open full-screen editor"} onClick={() => { setEditorOpen(true); setFocusMode((value) => !value); }}><Icon name={focusMode ? "minimize-2" : "maximize-2"} size={16}/></button>
+          <button type="button" className={`icon-button ${selected.pinned ? "pinned" : ""}`} title={selected.pinned ? "Unpin note" : "Pin note"} aria-label={selected.pinned ? "Unpin note" : "Pin note"} onClick={togglePin}><Icon name="pin" size={16}/></button>
+          <button type="button" className="icon-button" title={selected.archived ? "Restore note" : "Archive note"} aria-label={selected.archived ? "Restore note" : "Archive note"} onClick={toggleArchive}><Icon name="archive" size={16}/></button>
+          <div className="note-actions-menu-wrap">
+            <button type="button" className="icon-button" title="More note actions" aria-label="More note actions" aria-expanded={showNoteActions} onClick={() => setShowNoteActions((value) => !value)}><Icon name="more" size={17}/></button>
+            {showNoteActions && <div className="note-actions-menu" role="menu">
+              <button type="button" role="menuitem" onClick={exportSelectedNote}><Icon name="download" size={15}/>Export as HTML</button>
+              <button type="button" role="menuitem" onClick={duplicateSelectedNote}><Icon name="copy" size={15}/>Duplicate note</button>
+              <div className="note-actions-menu-divider"/>
+              <button type="button" role="menuitem" className="danger" onClick={deleteSelectedNote}><Icon name="trash-2" size={15}/>Delete permanently</button>
+            </div>}
+          </div>
+        </div></div>
         <div className="note-editor-content">
           <input className="note-editor-title" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Untitled note" aria-label="Note title"/>
           <div className="note-editor-meta"><span><Icon name="folder" size={13}/>{folders.find((folder) => folder.id === selected.folderId)?.name ?? "Inbox"}</span><span><Icon name="clock" size={13}/>{selected.updatedAt}</span></div>
@@ -440,7 +535,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
           {showDestination && <NoteDestination title={draftTitle} body={plainTextFromHtml(draftHtml)} folders={folders} notes={notes} folderId={currentFolderId} excludeId={selected.id} onFolderChange={(folderId) => updateNote(selected.id, { folderId })} onFoldersChange={onFoldersChange}/>}
         </div>
       </> : <div className="note-editor-empty"><div><Icon name="sticky-note" size={27}/></div><h3>Select a note</h3><p>Choose a note from the list or create a new one to start writing.</p><button className="button button-primary button-small" onClick={onQuickCapture}><Icon name="plus" size={14}/>Create note</button></div>}
-    </section>
+    </section>}
 
     {drawingOpen && <NoteDrawingModal onClose={() => setDrawingOpen(false)} onInsert={insertDrawing}/>}
     {folderDialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setFolderDialog(false); }}><form className="modal new-folder-modal" onSubmit={createFolder}><div className="modal-header"><div><div className="eyebrow">ORGANISE YOUR KNOWLEDGE</div><h2>Create a folder</h2><p>Folders keep related notes together.</p></div><button className="icon-button" type="button" onClick={() => setFolderDialog(false)}><Icon name="x"/></button></div><label htmlFor="folder-name">Folder name</label><input id="folder-name" autoFocus value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="e.g. Java Concurrency"/><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setFolderDialog(false)}>Cancel</button><button type="submit" className="button button-primary" disabled={!folderName.trim()}><Icon name="plus" size={14}/>Create folder</button></div></form></div>}
