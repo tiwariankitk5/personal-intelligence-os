@@ -340,7 +340,7 @@ public class PiosDataController {
             .addAttributes("a", "href")
             .addProtocols("a", "href", "http", "https", "mailto")
             .addAttributes("input", "type", "checked", "disabled")
-            .addAttributes("img", "src", "alt", "class", "data-pios-diagram-id", "contenteditable")
+            .addAttributes("img", "src", "alt", "title", "class", "data-pios-diagram-id", "contenteditable")
             .addProtocols("img", "src", "data");
 
     private String cleanHtml(String value) {
@@ -371,6 +371,7 @@ public class PiosDataController {
             image.clearAttributes();
             image.attr("src", source);
             image.attr("alt", "Editable diagram — double-click to modify");
+            image.attr("title", "Double-click to edit this diagram");
             image.attr("class", "pios-inline-diagram");
             image.attr("data-pios-diagram-id", diagramId);
             image.attr("contenteditable", "false");
