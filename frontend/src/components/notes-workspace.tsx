@@ -314,6 +314,9 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     setDrawingSaving(true);
     try {
       const exported = await exporter();
+      if (exported.previewDataUrl.length > 3_500_000) {
+        throw new Error("This diagram preview is over 3.5 MB. Reduce its size or remove large embedded images.");
+      }
       const diagramId = editingDiagramId ?? crypto.randomUUID();
       const store = readDiagramStore(inkData);
       const diagrams = [...store.diagrams];
@@ -326,6 +329,14 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       const editor = editorRef.current;
       if (!editor) throw new Error("The note editor is no longer available.");
       let image = editor.querySelector(`img[data-pios-diagram-id="${diagramId}"]`) as HTMLImageElement | null;
+      const previousPreviewSize = image?.getAttribute("src")?.length ?? 0;
+      const projectedHtmlSize = editor.innerHTML.length - previousPreviewSize + exported.previewDataUrl.length + (image ? 0 : 220);
+      if (projectedHtmlSize > 4_000_000) {
+        throw new Error("This note has reached its 4 MB content limit. Remove a large image or diagram first.");
+      }
+      if (nextInkData.length > 12_000_000) {
+        throw new Error("This note's editable drawing data exceeds the 12 MB limit.");
+      }
       if (image) {
         image.src = exported.previewDataUrl;
         image.alt = "Editable diagram — double-click to modify";
