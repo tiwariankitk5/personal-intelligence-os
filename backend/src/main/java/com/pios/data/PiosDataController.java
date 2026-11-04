@@ -133,8 +133,8 @@ public class PiosDataController {
         String html = cleanHtml(request.bodyHtml());
         String plain = request.plainText() == null || request.plainText().isBlank() ? htmlToText(html) : request.plainText().trim();
         jdbc.update("""
-                INSERT INTO notes(id,user_id,folder_id,title,body_html,plain_text,color,is_pinned,is_archived,sort_order)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO notes(id,user_id,folder_id,title,body_html,plain_text,color,is_pinned,is_archived,sort_order,ink_data,cover_url)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 """, id, userId, request.folderId(), title, html, plain, safeNoteColor(request.color()),
                 request.pinned(), request.archived(), request.order(), request.inkData(), request.coverUrl());
         return noteById(id, userId);
@@ -291,11 +291,11 @@ public class PiosDataController {
     }
 
     private NoteResponse noteById(UUID id, UUID userId) {
-        return jdbc.queryForObject("SELECT id,title,body_html,plain_text,folder_id,color,is_pinned,is_archived,sort_order,updated_at FROM notes WHERE id=? AND user_id=?",
+        return jdbc.queryForObject("SELECT id,title,body_html,plain_text,folder_id,color,is_pinned,is_archived,sort_order,ink_data,cover_url,updated_at FROM notes WHERE id=? AND user_id=?",
                 (rs, row) -> new NoteResponse(rs.getObject("id", UUID.class), rs.getString("title"), rs.getString("body_html"),
                         rs.getString("plain_text"), rs.getObject("folder_id", UUID.class), rs.getString("color"),
                         rs.getBoolean("is_pinned"), rs.getBoolean("is_archived"), rs.getLong("sort_order"),
-                        rs.getTimestamp("updated_at").toInstant()), id, userId);
+                        rs.getString("ink_data"), rs.getString("cover_url"), rs.getTimestamp("updated_at").toInstant()), id, userId);
     }
 
     private SourceResponse sourceById(UUID id, UUID userId) {
