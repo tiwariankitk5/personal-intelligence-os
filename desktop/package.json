@@ -1,0 +1,21 @@
+{
+  "name": "pios-peek-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PIOS account-backed screen-edge note companion",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "package:win": "electron-packager . PIOS-Peek --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/(test|dist)\"",
+    "package:mac": "electron-packager . PIOS-Peek --platform=darwin --arch=arm64 --out=dist --overwrite --ignore=\"^/(test|dist)\""
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "@electron/packager": "20.3.0"
+  },
+  "overrides": {
+    "glob": "14.0.3",
+    "minimatch": "11.0.4"
+  }
+}
