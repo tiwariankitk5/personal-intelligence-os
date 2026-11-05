@@ -7,5 +7,5 @@ function appOrigin(input='http://localhost:3100') {
 }
 function trustedFrame(url,origin){try{const value=new URL(url);return value.origin===origin&&value.pathname==='/peek';}catch{return false;}}
 function noteId(value){return typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);}
-function edgeBounds(area,side,expanded){const width=Math.min(expanded?380:34,area.width);const height=Math.min(expanded?720:150,area.height);return {x:side==='left'?area.x:area.x+area.width-width,y:area.y+Math.round((area.height-height)/2),width,height};}
+function edgeBounds(area,side,expanded,count=1){const width=Math.min(expanded?380:34,area.width);const height=Math.min(expanded?720:Math.max(150,count*80+48),area.height);return {x:side==='left'?area.x:area.x+area.width-width,y:area.y+Math.round((area.height-height)/2),width,height};}
 module.exports={appOrigin,trustedFrame,noteId,edgeBounds};

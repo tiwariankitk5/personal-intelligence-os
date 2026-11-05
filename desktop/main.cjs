@@ -6,7 +6,7 @@ const origin=appOrigin(process.env.PIOS_DESKTOP_URL||'http://localhost:3100');
 const partition='persist:pios-peek';
 let edge,workspace,tray,side='right',expanded=false,quitting=false,shortcutReady=false,paused=false;
 const notes=new Map();
-let cookieReloadTimer;
+let cookieReloadTimer,edgeCount=1;
 const hidden=process.argv.includes('--hidden');
 const background=process.argv.includes('--background');
 app.setPath('userData',path.join(app.getPath(hidden?'temp':'appData'),hidden?'PIOS-Peek-test':'PIOS-Peek'));
@@ -23,7 +23,7 @@ function guard(win){
   win.webContents.on('did-fail-load',(_event,code)=>{if(code!==-3)console.error(`PIOS window failed to load (${code}); check the configured server.`);});
 }
 function area(){return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;}
-function resizeEdge(value){expanded=value;edge.setBounds(edgeBounds(area(),side,expanded));edge.webContents.send('peek:state',{expanded,side});}
+function resizeEdge(value){expanded=value;edge.setBounds(edgeBounds(area(),side,expanded,edgeCount));edge.webContents.send('peek:state',{expanded,side});}
 function workspaceWindow(){if(!workspace||workspace.isDestroyed()){workspace=new BrowserWindow(options({width:1100,height:800,title:'PIOS workspace'}));guard(workspace);workspace.loadURL(origin);workspace.on('closed',()=>{workspace=null;});}if(!hidden){workspace.show();workspace.focus();}}
 function showEdge(){if(paused)paused=false;resizeEdge(true);if(!hidden){edge.show();edge.focus();}}
 function closeNoteWindows(){for(const win of notes.values())if(!win.isDestroyed())win.destroy();notes.clear();}
@@ -45,10 +45,12 @@ app.whenReady().then(()=>{
   sess.setPermissionCheckHandler(()=>false);
   // A session rotation/sign-out invalidates old note windows before another user can use them.
   sess.cookies.on('changed',(_event,cookie)=>{if(cookie.name==='JSESSIONID'){closeNoteWindows();if(edge&&!edge.isDestroyed()){resizeEdge(false);clearTimeout(cookieReloadTimer);cookieReloadTimer=setTimeout(()=>{if(!edge.isDestroyed())edge.webContents.reload();},100);}}});
-  edge=new BrowserWindow(options({frame:false,resizable:false,skipTaskbar:true,alwaysOnTop:true,...edgeBounds(area(),side,false)}));guard(edge);
+  edge=new BrowserWindow(options({frame:false,transparent:true,backgroundColor:'#00000000',resizable:false,skipTaskbar:true,alwaysOnTop:true,...edgeBounds(area(),side,false)}));guard(edge);
   edge.loadURL(origin+'/peek');edge.once('ready-to-show',()=>{if(!hidden)edge.showInactive();});
   edge.on('close',event=>{if(!quitting){event.preventDefault();edge.hide();}});
   screen.on('display-metrics-changed',()=>resizeEdge(expanded));screen.on('display-removed',()=>resizeEdge(expanded));
+  ipc('peek:refresh-deck',()=>{edge.webContents.send('peek:refresh');});
+  ipc('peek:count',(event,value)=>{if(BrowserWindow.fromWebContents(event.sender)!==edge||!Number.isInteger(value)||value<0||value>8)throw new Error('Invalid tab count');edgeCount=Math.max(1,value);if(!expanded)resizeEdge(false);});
   ipc('peek:state',()=>({expanded,side}));
   ipc('peek:workspace',()=>workspaceWindow());
   ipc('peek:expand',(event,value)=>{if(BrowserWindow.fromWebContents(event.sender)!==edge||typeof value!=='boolean')throw new Error('Invalid edge request');resizeEdge(value);});
@@ -59,7 +61,7 @@ app.whenReady().then(()=>{
     const existing=notes.get(id);if(existing&&!existing.isDestroyed()){if(!hidden){existing.show();existing.focus();}return;}
     if(notes.size>=12)throw new Error('Close a floating note before opening another (maximum 12).');
     const a=area(),offset=(notes.size%6)*28;
-    const win=new BrowserWindow(options({width:Math.min(440,a.width),height:Math.min(620,a.height),x:a.x+30+offset,y:a.y+30+offset,title:'PIOS Peek note',alwaysOnTop:true,minWidth:300,minHeight:300}));guard(win);notes.set(id,win);win.loadURL(origin+'/peek?note='+id);win.once('ready-to-show',()=>{if(!hidden)win.show();});win.on('closed',()=>notes.delete(id));
+    const win=new BrowserWindow(options({frame:false,width:Math.min(440,a.width),height:Math.min(620,a.height),x:a.x+30+offset,y:a.y+30+offset,title:'PIOS Peek note',alwaysOnTop:true,minWidth:300,minHeight:300}));guard(win);notes.set(id,win);win.loadURL(origin+'/peek?note='+id);win.once('ready-to-show',()=>{if(!hidden)win.show();});win.on('closed',()=>notes.delete(id));
   });
   tray=new Tray(nativeImage.createFromPath(path.join(__dirname,'tray.png')));tray.setToolTip('PIOS Peek notes');tray.on('click',showEdge);
   shortcutReady=globalShortcut.register('CommandOrControl+Alt+P',()=>{if(edge.isVisible()&&expanded){resizeEdge(false);}else showEdge();});buildMenu();
