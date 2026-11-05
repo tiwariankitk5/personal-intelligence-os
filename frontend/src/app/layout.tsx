@@ -4,6 +4,7 @@ import "./globals.css";
 import "./connected.css";
 import "./workspace.css";
 import "./retrieval.css";
+import "./learning.css";
 
 export const metadata: Metadata = {
   title: "PIOS — Personal Intelligence OS",

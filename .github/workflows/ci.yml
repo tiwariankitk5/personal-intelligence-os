@@ -51,6 +51,7 @@ jobs:
         env:
           PIOS_AUTH_COOLDOWN_SECONDS: '2'
           PIOS_AUTH_SMOKE_DISPOSABLE: 'true'
+          PIOS_AUTH_REGISTER_IP_LIMIT: '20'
           PIOS_ALLOW_LOCAL_MODELS: 'true'
           PIOS_RAG_WORKER_DELAY_MS: '250'
         run: |
@@ -70,6 +71,7 @@ jobs:
           node ../scripts/smoke-test.mjs
           node ../scripts/rag-test-provider.mjs > target/rag-fixture.log 2>&1 &
           node ../scripts/rag-smoke-test.mjs
+          node ../scripts/learning-smoke-test.mjs
           node ../scripts/auth-abuse-smoke.mjs
 
   frontend:

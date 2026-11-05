@@ -144,3 +144,25 @@ export const retryRetrieval = () => apiRequest<RetrievalStatus>("/ai/retrieval/r
 export const rebuildRetrieval = () => apiRequest<RetrievalStatus>("/ai/retrieval/rebuild", { method: "POST" });
 export type RetrievedPassage = { chunkId: string; id: string; title: string; type: string; chunkIndex: number; excerpt: string };
 export const searchRetrieval = (query: string) => apiRequest<{ mode: string; warning: string | null; passages: RetrievedPassage[] }>("/ai/retrieval/search", { method: "POST", body: JSON.stringify({ query }) });
+
+export type LearningQuestion = { id: string; prompt: string; options: string[]; passed: boolean };
+export type LessonTimedNote = { id: string; seconds: number; body: string; exportedNoteId: string | null; createdAt: string };
+export type LearningLesson = { id: string; title: string; position: number; durationMinutes: number; videoId: string | null; startSeconds: number; endSeconds: number | null; article: string; completed: boolean; known: boolean; questions: LearningQuestion[]; notes: LessonTimedNote[] };
+export type CourseView = { objectiveId: string; dailyMinutes: number; progress: number; lessons: LearningLesson[]; plan: { day: number; lessonId: string; title: string; minutes: number; offsetMinutes: number }[]; draftRequestsToday: number };
+export type QuestionDraft = { prompt: string; options: string[]; correctIndex: number; explanation: string; replaySeconds: number; sourceQuote: string };
+export type LessonDraft = { title: string; article: string; questions: QuestionDraft[]; reviewRequired: boolean; timestamped: boolean };
+export type LessonInput = { title: string; videoUrl: string; durationMinutes: number; startSeconds: number | null; endSeconds: number | null; article: string; questions: QuestionDraft[] | null; aiDraft: boolean; reviewed: boolean };
+export type LessonFeedback = { correct: boolean; correctIndex: number; explanation: string; replaySeconds: number; sourceQuote: string; known: boolean };
+export const getCourse = (id: string) => apiRequest<CourseView>(`/learning/objectives/${id}/course`);
+export const setCoursePace = (id: string, dailyMinutes: number) => apiRequest<CourseView>(`/learning/objectives/${id}/pace`, { method: "PUT", body: JSON.stringify({ dailyMinutes }) });
+export const addCourseLesson = (id: string, lesson: LessonInput) => apiRequest<{ id: string }>(`/learning/objectives/${id}/lessons`, { method: "POST", body: JSON.stringify(lesson) });
+export const editCourseLesson = (id: string, lesson: LessonInput) => apiRequest<CourseView>(`/learning/lessons/${id}`, { method: "PUT", body: JSON.stringify(lesson) });
+export const deleteCourseLesson = (id: string) => apiRequest<CourseView>(`/learning/lessons/${id}`, { method: "DELETE" });
+export const setLessonComplete = (id: string, completed: boolean) => apiRequest<CourseView>(`/learning/lessons/${id}/state`, { method: "PATCH", body: JSON.stringify({ completed }) });
+export const addLessonQuestion = (id: string, question: QuestionDraft) => apiRequest<CourseView>(`/learning/lessons/${id}/questions`, { method: "POST", body: JSON.stringify(question) });
+export const removeLessonQuestion = (id: string) => apiRequest<CourseView>(`/learning/questions/${id}`, { method: "DELETE" });
+export const answerLessonQuestion = (id: string, choice: number, placement: boolean) => apiRequest<LessonFeedback>(`/learning/questions/${id}/answer`, { method: "POST", body: JSON.stringify({ choice, placement }) });
+export const addLessonTimedNote = (id: string, seconds: number, body: string) => apiRequest<CourseView>(`/learning/lessons/${id}/notes`, { method: "POST", body: JSON.stringify({ seconds, body }) });
+export const removeLessonTimedNote = (id: string) => apiRequest<CourseView>(`/learning/lesson-notes/${id}`, { method: "DELETE" });
+export const exportLessonTimedNote = (id: string) => apiRequest<{ id: string }>(`/learning/lesson-notes/${id}/save-note`, { method: "POST" });
+export const generateLessonDraft = (id: string, title: string, transcript: string) => apiRequest<LessonDraft>(`/learning/objectives/${id}/lesson-draft`, { method: "POST", body: JSON.stringify({ title, transcript }) });

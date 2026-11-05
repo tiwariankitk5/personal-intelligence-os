@@ -1,0 +1,9 @@
+# PeekNotes-inspired web deck
+
+Implemented in PIOS: an account-backed, searchable edge deck available across workspace pages; choose left/right (remembered per account/browser); hover or click the edge handle; pinned/recent or title sorting; active/archive filtering; up to three floating panels; draggable headers on desktop; expanded view; six existing note colors; pin/archive/restore; ten-second archive undo; JSON export; safely escaped text additions which preserve formatted content. Alt+Shift+P toggles the deck while the page has focus. Escape closes the deck. Unsaved additions require confirmation before closing their panel.
+
+This uses existing PIOS note persistence and account isolation. Changes are available on another signed-in device after Refresh; this is not live collaborative synchronization. Refresh first drains pending note writes. Concurrent device edits currently use last write wins. The Notes editor retains permanent delete and PDF/HTML/CSV export. JSON here is export only.
+
+Not implemented: OS-level always-on-top windows, global hotkeys, tray/startup integration, native fullscreen detection, native Windows/Mac packaging, local-only storage mode, import, or eight-color parity. A browser page cannot provide these desktop privileges. Mobile uses the responsive web deck, not desktop overlay windows.
+
+Validation: frontend tests/types/production build; headless Edge checks for failed-save retry without duplication, append persistence, archive/undo, expanded view, side preference, responsive 390/820px layouts and no page exceptions. See scripts/learning-peek-browser.cjs (requires ignored local Playwright installation). Physical iPad/stylus and native operating-system behavior remain unverified.

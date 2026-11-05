@@ -257,8 +257,13 @@ public class PiosDataController {
     }
 
     @PatchMapping("/learning/objectives/{id}")
+    @Transactional
     public LearningObjectiveResponse updateLearningObjective(@PathVariable UUID id, @RequestBody LearningProgressRequest request) {
         if (request.progress() < 0 || request.progress() > 100) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Progress must be between 0 and 100.");
+        var owned = jdbc.query("SELECT id FROM learning_objectives WHERE id=? AND user_id=? FOR UPDATE", (rs, n) -> rs.getObject(1, UUID.class), id, currentUserId());
+        if (owned.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Learning objective not found.");
+        Integer lessons = jdbc.queryForObject("SELECT COUNT(*) FROM learning_lessons WHERE objective_id=? AND user_id=?", Integer.class, id, currentUserId());
+        if (lessons != null && lessons > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Progress follows lesson completion and placement results.");
         int updated = jdbc.update("UPDATE learning_objectives SET progress=?, updated_at=now() WHERE id=? AND user_id=?",
                 request.progress(), id, currentUserId());
         if (updated == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Learning objective not found.");

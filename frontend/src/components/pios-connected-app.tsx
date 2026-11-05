@@ -3,15 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Icon } from "@/components/icon";
+import PeekDeck from "@/components/peek-deck";
 import NotesWorkspace, { QuickCaptureModal } from "@/components/notes-workspace";
 import AiProvidersView from "@/components/ai-providers-view";
+import LearningWorkspace from "@/components/learning-workspace";
 import { createNoteWriter } from "@/lib/note-writer";
 import type { NoteFolder, PiosNote } from "@/lib/notes";
 import {
   ApiChatResponse, ApiCitation, ApiFolder, ApiNote, ApiObjective, ApiProvider, ApiSource, ApiUser,
-  clearToken, createFolder, deleteFolder, createNote, createObjective, createTextSource, deleteObjective,
+  clearToken, createFolder, deleteFolder, createNote, createTextSource,
   getFolders, getMe, getNotes, getObjectives, getProviders, getSources, removeNote,
-  removeSource, sendChat, signIn, signUp, signOut, updateNote, updateObjectiveProgress, uploadSource,
+  removeSource, sendChat, signIn, signUp, signOut, updateNote, uploadSource,
 } from "@/lib/api";
 
 type View = "overview" | "notes" | "knowledge" | "assistant" | "learning" | "ai" | "graph" | "settings";
@@ -45,6 +47,7 @@ export default function PiosConnectedApp() {
   const [tokenExists, setTokenExists] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [user, setUser] = useState<ApiUser | null>(null);
+  const activeUserRef = useRef<string | null>(null); activeUserRef.current = user?.id || null;
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
@@ -73,10 +76,6 @@ export default function PiosConnectedApp() {
   const [chatEntries, setChatEntries] = useState<ChatEntry[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [chatBusy, setChatBusy] = useState(false);
-  const [objectiveTitle, setObjectiveTitle] = useState("");
-  const [objectiveCategory, setObjectiveCategory] = useState("Backend Engineering");
-  const [objectiveDescription, setObjectiveDescription] = useState("");
-  const [objectiveBusy, setObjectiveBusy] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -247,26 +246,6 @@ export default function PiosConnectedApp() {
     } finally { setChatBusy(false); }
   }
 
-  async function addObjective(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!objectiveTitle.trim()) return;
-    setObjectiveBusy(true);
-    try {
-      const created = await createObjective(objectiveTitle.trim(), objectiveDescription.trim(), objectiveCategory);
-      setObjectives((current) => [created, ...current]); setObjectiveTitle(""); setObjectiveDescription(""); notify("Learning objective created.");
-    } catch (error) { notify(error instanceof Error ? error.message : "Could not create the learning objective."); }
-    finally { setObjectiveBusy(false); }
-  }
-
-  async function setProgress(objective: ApiObjective, progress: number) {
-    try { const updated = await updateObjectiveProgress(objective.id, progress); setObjectives((current) => current.map((item) => item.id === objective.id ? updated : item)); }
-    catch (error) { notify(error instanceof Error ? error.message : "Could not update progress."); }
-  }
-
-  async function removeObjective(id: string) {
-    try { await deleteObjective(id); setObjectives((current) => current.filter((item) => item.id !== id)); }
-    catch (error) { notify(error instanceof Error ? error.message : "Could not delete objective."); }
-  }
-
   async function removeKnowledgeSource(id: string) {
     try { await removeSource(id); setSources((current) => current.filter((source) => source.id !== id)); notify("Source removed."); }
     catch (error) { notify(error instanceof Error ? error.message : "Could not remove source."); }
@@ -314,8 +293,12 @@ export default function PiosConnectedApp() {
 
         {activeView === "assistant" && <section className="pios-view pios-chat-view"><div className="pios-page-heading"><div><div className="pios-eyebrow">GROUNDED AI ASSISTANT</div><h1>Ask PIOS</h1><p>Ask questions using your private notes and uploaded sources as reference material.</p></div><span className="pios-privacy-chip"><Icon name="lock" size={13}/>Workspace-scoped retrieval</span></div><div className="pios-chat-panel"><div className="pios-chat-messages">{!chatEntries.length && <div className="pios-chat-empty"><div className="pios-chat-mark"><Icon name="sparkles" size={23}/></div><h2>What would you like to understand?</h2><p>PIOS will search your notes and uploaded files, then ask your selected model to answer with source references.</p><div className="pios-prompt-chips">{["Summarise my notes about Spring Boot", "What have I saved about RAG?", "Create a study plan from my knowledge library"].map((prompt) => <button key={prompt} onClick={() => setChatQuestion(prompt)}>{prompt}<Icon name="arrow-up-right" size={13}/></button>)}</div></div>}{chatEntries.map((entry) => <div key={entry.id} className={`pios-chat-message ${entry.role}`}><div className="pios-chat-avatar">{entry.role === "assistant" ? <Icon name="sparkles" size={15}/> : user.displayName.slice(0,1).toUpperCase()}</div><div className="pios-chat-bubble"><span className="pios-chat-role">{entry.role === "assistant" ? "PIOS" : "YOU"}</span><p>{entry.text}</p>{entry.retrievalMode && <small className="retrieval-answer-mode">{entry.retrievalMode === "hybrid" ? "Hybrid retrieval" : "Keyword retrieval"}{entry.retrievalWarning ? " · " + entry.retrievalWarning : ""}</small>}{entry.citations && entry.citations.length > 0 && <div className="pios-citations"><strong>Sources used</strong>{entry.citations.map((citation, index) => <details key={citation.chunkId || citation.id}><summary>[{citation.number || index + 1}] {citation.title} · passage {(citation.chunkIndex ?? 0) + 1}</summary><blockquote>{citation.excerpt}</blockquote></details>)}</div>}</div></div>)}{chatBusy && <div className="pios-chat-message assistant"><div className="pios-chat-avatar"><Icon name="sparkles" size={15}/></div><div className="pios-chat-bubble"><span className="pios-chat-role">PIOS</span><p className="pios-thinking">Searching your knowledge and generating an answer…</p></div></div>}</div><form className="pios-chat-composer" onSubmit={handleChat}><textarea value={chatQuestion} onChange={(event) => setChatQuestion(event.target.value)} placeholder="Ask anything about your notes and sources…" rows={2} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }}}/><div><span><Icon name="shield-check" size={13}/> Retrieved context is scoped to your account</span><button type="submit" disabled={!chatQuestion.trim() || chatBusy}><Icon name="arrow-up" size={17}/></button></div></form></div></section>}
 
-        {activeView === "learning" && <section className="pios-view"><div className="pios-page-heading"><div><div className="pios-eyebrow">DELIBERATE PRACTICE</div><h1>Learning objectives</h1><p>Define the subjects you want to master and update progress as you practise.</p></div></div><div className="pios-learning-layout"><form className="pios-panel pios-objective-form" onSubmit={addObjective}><h2>Create an objective</h2><label>What do you want to learn?<input value={objectiveTitle} onChange={(event) => setObjectiveTitle(event.target.value)} required maxLength={240} placeholder="e.g. Master Spring Security"/></label><label>Category<input value={objectiveCategory} onChange={(event) => setObjectiveCategory(event.target.value)} maxLength={120}/></label><label>Description<textarea value={objectiveDescription} onChange={(event) => setObjectiveDescription(event.target.value)} rows={3} placeholder="What should you be able to do?"/></label><button className="pios-primary-button" type="submit" disabled={objectiveBusy}>{objectiveBusy ? "Creating…" : "Add learning objective"}<Icon name="plus" size={15}/></button></form><div className="pios-objectives-list">{objectives.map((objective) => <article className="pios-panel pios-objective-card" key={objective.id}><div className="pios-objective-top"><span className="pios-category-chip">{objective.category}</span><button onClick={() => void removeObjective(objective.id)} aria-label="Delete objective"><Icon name="trash-2" size={15}/></button></div><h3>{objective.title}</h3>{objective.description && <p>{objective.description}</p>}<div className="pios-objective-progress"><strong>{objective.progress}%</strong><span>complete</span></div><input aria-label={`Progress for ${objective.title}`} type="range" min="0" max="100" step="5" value={objective.progress} onChange={(event) => void setProgress(objective, Number(event.target.value))}/><div className="pios-progress-actions"><button onClick={() => void setProgress(objective, Math.max(0, objective.progress - 10))}>−10%</button><button onClick={() => void setProgress(objective, Math.min(100, objective.progress + 10))}>+10%</button><button onClick={() => void setProgress(objective, 100)}>Mark mastered</button></div></article>)}{!objectives.length && <Empty title="Start with one learning goal" body="Create an objective to make learning progress visible."/>}</div></div></section>}
-
+        {activeView === "learning" && <LearningWorkspace objectives={objectives}
+          onCreated={(objective) => { if (activeUserRef.current === user.id) setObjectives((current) => [objective, ...current]); }}
+          onRemoved={(id) => { if (activeUserRef.current === user.id) setObjectives((current) => current.filter((item) => item.id !== id)); }}
+          onProgress={(id, progress) => { if (activeUserRef.current === user.id) setObjectives((current) => current.map((item) => item.id === id ? { ...item, progress } : item)); }}
+          onNoteExported={async () => { const owner = user.id; if (activeUserRef.current !== owner) return; const mapped = (await getNotes()).map(toPiosNote); if (activeUserRef.current !== owner) return; notesRef.current = mapped; noteWriter.reset(mapped); setNotes(mapped); }}
+          onOpenProviders={() => setActiveView("ai")} onToast={notify}/>}
         {activeView === "ai" && <section className="pios-view"><AiProvidersView onToast={notify}/></section>}
 
         {activeView === "graph" && <section className="pios-view"><div className="pios-page-heading"><div><div className="pios-eyebrow">CONNECTED KNOWLEDGE</div><h1>Knowledge map</h1><p>A lightweight view of your current notes and uploaded materials.</p></div></div><div className="pios-panel pios-graph-panel"><div className="pios-graph-center"><span>YOUR KNOWLEDGE</span><strong>{notes.length + sources.length}</strong><small>items in your workspace</small></div><div className="pios-graph-nodes">{notes.slice(0, 8).map((note, index) => <button key={note.id} className={`pios-graph-node n${index % 5}`} onClick={() => setActiveView("notes")}><Icon name="sticky-note" size={15}/>{note.title}</button>)}{sources.slice(0, 8).map((source, index) => <button key={source.id} className={`pios-graph-node s${index % 5}`} onClick={() => setActiveView("knowledge")}><Icon name="file-text" size={15}/>{source.title}</button>)}</div>{!notes.length && !sources.length && <Empty title="Nothing to map yet" body="Save notes and upload sources to start building your knowledge map."/>}</div></section>}
@@ -328,6 +311,18 @@ export default function PiosConnectedApp() {
     {quickCaptureOpen && <QuickCaptureModal folders={folders} notes={notes} onClose={() => setQuickCaptureOpen(false)} onSave={(note, folder, pageId) => void saveQuickNote(note, folder, pageId)}/>}
     {addSourceOpen && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAddSourceOpen(false); }}><div className="modal add-modal"><div className="modal-header"><div><div className="eyebrow">KNOWLEDGE INGESTION</div><h2>Add to your library</h2><p>Upload a PDF, TXT or Markdown file, or capture text directly.</p></div><button className="icon-button" onClick={() => setAddSourceOpen(false)}><Icon name="x"/></button></div><form onSubmit={submitSource}><div className="form-field"><label>Source title</label><input value={sourceTitle} onChange={(event) => setSourceTitle(event.target.value)} placeholder="Title for pasted text"/></div><div className="form-field"><label>Paste text (optional)</label><textarea rows={5} value={sourceText} onChange={(event) => setSourceText(event.target.value)} placeholder="Paste an article or your study material…"/></div><div className="form-field"><label>Or upload a file</label><input type="file" accept=".pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown" onChange={(event) => setSourceFile(event.target.files?.[0] ?? null)}/><small>Maximum 25 MB. Supported formats: PDF, TXT and Markdown.</small></div><div className="modal-note"><Icon name="lock" size={14}/><span>Files are stored in your backend uploads volume and indexed for workspace-scoped retrieval.</span></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setAddSourceOpen(false)}>Cancel</button><button type="submit" className="button button-primary" disabled={sourceBusy}>{sourceBusy ? "Processing…" : "Add to library"}</button></div></form></div></div>}
     {showSearch && <div className="pios-search-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSearch(false); }}><div className="pios-search-dialog"><div><Icon name="search" size={18}/><input autoFocus value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} placeholder="Search notes and documents…"/><button onClick={() => setShowSearch(false)}><Icon name="x" size={16}/></button></div><p>Search terms are applied to notes and source titles. Press Escape to close.</p><div className="pios-search-results">{notes.filter((note) => `${note.title} ${note.plainText}`.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map((note) => <button key={note.id} onClick={() => { setActiveView("notes"); setShowSearch(false); }}><Icon name="sticky-note" size={16}/><span>{note.title}</span></button>)}{sources.filter((source) => source.title.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map((source) => <button key={source.id} onClick={() => { setActiveView("knowledge"); setKnowledgeQuery(globalSearch); setShowSearch(false); }}><Icon name="file-text" size={16}/><span>{source.title}</span></button>)}</div></div></div>}
+    <PeekDeck key={user.id} accountId={user.id} notes={notes} onCreate={() => setQuickCaptureOpen(true)} onPatch={async (id, patch) => {
+      const owner = user.id;
+      const previous = notesRef.current.find(note => note.id === id);
+      if (!previous) return false;
+      const updated = {...previous, ...patch, updatedAt: "Just now", order: Date.now()};
+      const ok = await persistNotes(notesRef.current.map(note => note.id === id ? updated : note));
+      if (!ok && activeUserRef.current === owner && notesRef.current.find(note => note.id === id) === updated) {
+        const restored = notesRef.current.map(note => note.id === id ? previous : note);
+        notesRef.current = restored; setNotes(restored);
+      }
+      return ok;
+    }} onRefresh={async () => { if (await noteWriter.save(notesRef.current)) await loadWorkspace(); }}/>
     {toast && <div className="pios-toast"><Icon name="info" size={15}/>{toast}</div>}
   </div>;
 }
