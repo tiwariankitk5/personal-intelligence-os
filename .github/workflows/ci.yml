@@ -32,6 +32,8 @@ jobs:
       APP_JWT_SECRET_BASE64: cGlvcy10ZXN0LXNlY3JldC1rZXktMzItYnl0ZXMhISE=
       PIOS_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       APP_SESSION_COOKIE_SECURE: 'false'
+      PIOS_AUTH_COOLDOWN_SECONDS: '2'
+      PIOS_AUTH_SMOKE_DISPOSABLE: 'true'
     defaults:
       run:
         working-directory: backend
@@ -63,6 +65,7 @@ jobs:
             exit 1
           fi
           node ../scripts/smoke-test.mjs
+          node ../scripts/auth-abuse-smoke.mjs
 
   frontend:
     runs-on: ubuntu-latest

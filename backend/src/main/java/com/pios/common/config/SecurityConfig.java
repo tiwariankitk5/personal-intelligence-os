@@ -1,6 +1,9 @@
 package com.pios.common.config;
 
 import com.pios.auth.JwtAuthenticationFilter;
+import com.pios.auth.AuthAbuseGuard;
+import com.pios.auth.AuthAbuseFilter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +18,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,7 +35,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter, AuthAbuseGuard abuse, ObjectMapper mapper) throws Exception {
         return http
                 .securityContext(context -> context.securityContextRepository(new HttpSessionSecurityContextRepository()))
                 .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))
@@ -49,6 +53,7 @@ public class SecurityConfig {
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .headers(headers -> headers.frameOptions(frame -> frame.deny()))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new AuthAbuseFilter(abuse, mapper), CsrfFilter.class)
                 .build();
     }
 
@@ -94,6 +99,6 @@ public class SecurityConfig {
     }
 
     private static final class ListHolder {
-        private static final java.util.List<String> AUTHORIZATION_HEADER = java.util.List.of("Authorization");
+        private static final java.util.List<String> AUTHORIZATION_HEADER = java.util.List.of("Authorization", "Retry-After");
     }
 }
