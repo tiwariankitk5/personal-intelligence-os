@@ -33,3 +33,7 @@ This consolidates the owner's requests through the instruction to start developm
 - Real OAuth/provider configuration, encrypted credentials and account/organisation isolation. No simulated connected accounts.
 - Clear local-only, synced and remote-AI data boundaries; provider budgets, abuse controls, safe uploads/endpoints, recovery/export/deletion, backups and monitoring.
 - Organisation permissions, billing, desktop packaging, Kubernetes deployment and external provider verification must be validated before claiming public production readiness.
+
+## Peek folder and reference motion — accepted 2026-11-05
+- Peek has its own Peek notes folder; existing notes are not automatically incorporated. New Peek notes are created there; users may deliberately move existing notes into it.
+- Match the supplied recording's colored retracting tabs, sliding hover previews, pastel handwriting-style floating cards, compact formatting controls and open/close motion in the main browser and companion; preserve autosave/retry and reduced-motion support.

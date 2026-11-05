@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Icon } from "@/components/icon";
+import {ensurePeekFolder,isPeekFolder} from "@/lib/peek-folder";
 import PeekDeck from "@/components/peek-deck";
 import NotesWorkspace, { QuickCaptureModal } from "@/components/notes-workspace";
 import AiProvidersView from "@/components/ai-providers-view";
@@ -311,7 +312,19 @@ export default function PiosConnectedApp() {
     {quickCaptureOpen && <QuickCaptureModal folders={folders} notes={notes} onClose={() => setQuickCaptureOpen(false)} onSave={(note, folder, pageId) => void saveQuickNote(note, folder, pageId)}/>}
     {addSourceOpen && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAddSourceOpen(false); }}><div className="modal add-modal"><div className="modal-header"><div><div className="eyebrow">KNOWLEDGE INGESTION</div><h2>Add to your library</h2><p>Upload a PDF, TXT or Markdown file, or capture text directly.</p></div><button className="icon-button" onClick={() => setAddSourceOpen(false)}><Icon name="x"/></button></div><form onSubmit={submitSource}><div className="form-field"><label>Source title</label><input value={sourceTitle} onChange={(event) => setSourceTitle(event.target.value)} placeholder="Title for pasted text"/></div><div className="form-field"><label>Paste text (optional)</label><textarea rows={5} value={sourceText} onChange={(event) => setSourceText(event.target.value)} placeholder="Paste an article or your study material…"/></div><div className="form-field"><label>Or upload a file</label><input type="file" accept=".pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown" onChange={(event) => setSourceFile(event.target.files?.[0] ?? null)}/><small>Maximum 25 MB. Supported formats: PDF, TXT and Markdown.</small></div><div className="modal-note"><Icon name="lock" size={14}/><span>Files are stored in your backend uploads volume and indexed for workspace-scoped retrieval.</span></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setAddSourceOpen(false)}>Cancel</button><button type="submit" className="button button-primary" disabled={sourceBusy}>{sourceBusy ? "Processing…" : "Add to library"}</button></div></form></div></div>}
     {showSearch && <div className="pios-search-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSearch(false); }}><div className="pios-search-dialog"><div><Icon name="search" size={18}/><input autoFocus value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} placeholder="Search notes and documents…"/><button onClick={() => setShowSearch(false)}><Icon name="x" size={16}/></button></div><p>Search terms are applied to notes and source titles. Press Escape to close.</p><div className="pios-search-results">{notes.filter((note) => `${note.title} ${note.plainText}`.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map((note) => <button key={note.id} onClick={() => { setActiveView("notes"); setShowSearch(false); }}><Icon name="sticky-note" size={16}/><span>{note.title}</span></button>)}{sources.filter((source) => source.title.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map((source) => <button key={source.id} onClick={() => { setActiveView("knowledge"); setKnowledgeQuery(globalSearch); setShowSearch(false); }}><Icon name="file-text" size={16}/><span>{source.title}</span></button>)}</div></div></div>}
-    <PeekDeck key={user.id} accountId={user.id} notes={notes} onCreate={() => setQuickCaptureOpen(true)} onPatch={async (id, patch) => {
+    <PeekDeck loading={dataLoading} key={user.id} accountId={user.id} notes={notes.filter(note => folders.some(folder => folder.id === note.folderId && isPeekFolder(folder)))} onCreate={async () => {
+      const owner = user.id;
+      if (!await noteWriter.save(notesRef.current) || activeUserRef.current !== owner) return null;
+      try {
+        const folder = await ensurePeekFolder(foldersRef.current);
+        if (activeUserRef.current !== owner) return null;
+        if (!foldersRef.current.some(item => item.id === folder.id)) { const next = [...foldersRef.current, folder]; foldersRef.current = next; setFolders(next); }
+        const created: PiosNote = {id:crypto.randomUUID(),title:"Untitled Peek note",bodyHtml:"<p><br></p>",plainText:"",folderId:folder.id,color:"butter",pinned:false,archived:false,order:Date.now(),updatedAt:"Just now"};
+        if (activeUserRef.current !== owner) return null;
+        if (!await persistNotes([...notesRef.current, created])) return null;
+        return created;
+      } catch (error) { notify(error instanceof Error ? error.message : "Could not create the Peek note."); return null; }
+    }} onPatch={async (id, patch) => {
       const owner = user.id;
       const previous = notesRef.current.find(note => note.id === id);
       if (!previous) return false;
