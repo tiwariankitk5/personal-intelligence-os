@@ -27,7 +27,11 @@ id_ed25519*
 # Build and test output
 dist/
 coverage/
+.validation/
 *.tsbuildinfo
 
 # Windows files
 Thumbs.db
+
+# Private recovery bundles, plaintext staging and recovery keys
+.recovery/

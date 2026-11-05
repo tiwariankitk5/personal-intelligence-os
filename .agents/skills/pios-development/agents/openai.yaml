@@ -1,0 +1,4 @@
+interface:
+  display_name: "PIOS Development"
+  short_description: "Focused PIOS implementation and validation"
+  default_prompt: "Use $pios-development to implement the requested PIOS milestone and run relevant checks."

@@ -17,12 +17,14 @@ import org.springframework.web.bind.annotation.*;
 public class BrowserSessionController {
     private final AuthService authService;
     private final CustomUserDetailsService users;
+    private final AuthAbuseGuard abuse;
     private final HttpSessionSecurityContextRepository contexts = new HttpSessionSecurityContextRepository();
     private final HttpSessionCsrfTokenRepository csrfTokens = new HttpSessionCsrfTokenRepository();
 
-    public BrowserSessionController(AuthService authService, CustomUserDetailsService users) {
+    public BrowserSessionController(AuthService authService, CustomUserDetailsService users, AuthAbuseGuard abuse) {
         this.authService = authService;
         this.users = users;
+        this.abuse = abuse;
     }
 
     @GetMapping("/csrf")
@@ -34,13 +36,13 @@ public class BrowserSessionController {
     @ResponseStatus(HttpStatus.CREATED)
     public AuthDtos.UserSummary register(@Valid @RequestBody AuthDtos.RegisterRequest body,
             HttpServletRequest request, HttpServletResponse response) {
-        return establishSession(authService.register(body).user(), request, response);
+        return establishSession(abuse.register(body.email(), request.getRemoteAddr(), () -> authService.register(body)).user(), request, response);
     }
 
     @PostMapping("/session/login")
     public AuthDtos.UserSummary login(@Valid @RequestBody AuthDtos.LoginRequest body,
             HttpServletRequest request, HttpServletResponse response) {
-        return establishSession(authService.login(body).user(), request, response);
+        return establishSession(abuse.login(body.email(), request.getRemoteAddr(), () -> authService.login(body)).user(), request, response);
     }
 
     private AuthDtos.UserSummary establishSession(AuthDtos.UserSummary user,

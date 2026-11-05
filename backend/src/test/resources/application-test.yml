@@ -11,6 +11,8 @@ spring:
   flyway:
     enabled: false
 app:
+  rag:
+    worker-enabled: false
   jwt:
     secret-base64: cGlvcy10ZXN0LXNlY3JldC1rZXktMzItYnl0ZXMhISE=
     expiration-ms: 3600000

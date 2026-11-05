@@ -18,6 +18,18 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(com.pios.auth.AuthAbuseGuard.RateLimitedException.class)
+    public ResponseEntity<ApiError> handleAuthLimit(com.pios.auth.AuthAbuseGuard.RateLimitedException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", Long.toString(ex.retryAfter())).header("Cache-Control", "no-store")
+                .body(response(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request, Map.of()).getBody());
+    }
+
+    @ExceptionHandler(com.pios.auth.AuthAbuseGuard.ProtectionUnavailableException.class)
+    public ResponseEntity<ApiError> handleAuthProtection(com.pios.auth.AuthAbuseGuard.ProtectionUnavailableException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header("Retry-After", "5").header("Cache-Control", "no-store")
+                .body(response(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, Map.of()).getBody());
+    }
+
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ResponseEntity<ApiError> handleEmailConflict(EmailAlreadyRegisteredException ex, HttpServletRequest request) {
         return response(HttpStatus.CONFLICT, ex.getMessage(), request, Map.of());

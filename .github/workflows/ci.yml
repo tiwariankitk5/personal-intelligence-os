@@ -48,6 +48,12 @@ jobs:
         with:
           node-version: '22'
       - name: Verify migrations and account-scoped API flows
+        env:
+          PIOS_AUTH_COOLDOWN_SECONDS: '2'
+          PIOS_AUTH_SMOKE_DISPOSABLE: 'true'
+          PIOS_AUTH_REGISTER_IP_LIMIT: '20'
+          PIOS_ALLOW_LOCAL_MODELS: 'true'
+          PIOS_RAG_WORKER_DELAY_MS: '250'
         run: |
           java -jar target/personal-intelligence-os-0.1.0-SNAPSHOT.jar > target/smoke-backend.log 2>&1 &
           ready=false
@@ -63,6 +69,10 @@ jobs:
             exit 1
           fi
           node ../scripts/smoke-test.mjs
+          node ../scripts/rag-test-provider.mjs > target/rag-fixture.log 2>&1 &
+          node ../scripts/rag-smoke-test.mjs
+          node ../scripts/learning-smoke-test.mjs
+          node ../scripts/auth-abuse-smoke.mjs
 
   frontend:
     runs-on: ubuntu-latest
@@ -78,5 +88,34 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm run build
+
+  desktop-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm audit --audit-level=moderate
+
+  recovery-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test scripts/recovery-crypto.test.mjs

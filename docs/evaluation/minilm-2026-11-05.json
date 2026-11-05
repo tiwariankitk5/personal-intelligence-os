@@ -1,0 +1,72 @@
+{
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "dimensions": 384,
+  "description": "Small English engineering/study retrieval regression set. Not a representative production benchmark.",
+  "queries": 8,
+  "keyword": {
+    "recallAt5": 0.5,
+    "mrr": 0.5,
+    "top1": 0.5
+  },
+  "hybrid": {
+    "recallAt5": 0.75,
+    "mrr": 0.75,
+    "top1": 0.75
+  },
+  "usage": {
+    "calls": 16,
+    "reserved_input": 2170,
+    "reported_tokens": 0,
+    "failed_calls": 0
+  },
+  "results": [
+    {
+      "query": "How many servers must confirm a change when five copies exist?",
+      "expected": "quorum",
+      "keywordRank": 1,
+      "hybridRank": 1
+    },
+    {
+      "query": "How do I stop duplicate purchases after a network retry?",
+      "expected": "idempotency",
+      "keywordRank": 0,
+      "hybridRank": 1
+    },
+    {
+      "query": "How can I reliably notify another service after saving an order?",
+      "expected": "outbox",
+      "keywordRank": 0,
+      "hybridRank": 0
+    },
+    {
+      "query": "Find related notes even if my question uses different wording.",
+      "expected": "retrieval",
+      "keywordRank": 1,
+      "hybridRank": 1
+    },
+    {
+      "query": "How can someone write with a pencil without their wrist making marks?",
+      "expected": "palm",
+      "keywordRank": 1,
+      "hybridRank": 1
+    },
+    {
+      "query": "How do we prove saved copies can recover our data after a failure?",
+      "expected": "backup",
+      "keywordRank": 0,
+      "hybridRank": 1
+    },
+    {
+      "query": "What prevents a crashed job runner from blocking work forever?",
+      "expected": "lease",
+      "keywordRank": 1,
+      "hybridRank": 1
+    },
+    {
+      "query": "How should a learning app decide when to show a flashcard again?",
+      "expected": "srs",
+      "keywordRank": 0,
+      "hybridRank": 0
+    }
+  ]
+}
