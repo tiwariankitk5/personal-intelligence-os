@@ -6,11 +6,11 @@ Portable Windows companion for the existing PIOS account. The web server/backend
 
 1. Start PIOS using the repository start-pios script.
 2. Open desktop/dist/PIOS-Peek-win32-x64/PIOS-Peek.exe. This portable local build is unsigned; do not distribute it as a production installer.
-3. Use the tray menu **Open PIOS / sign in**. Sign in inside that window; the companion has its own session, separate from your normal browser.
+3. The workspace opens visibly on manual launch. Use the tray menu **Open PIOS / sign in** to reopen it. Sign in inside that window; the companion has its own session, separate from your normal browser.
 4. Hover over the edge handle, search notes and select a note. Each note opens in its own resizable, always-on-top OS window. Reopening it focuses the existing window.
 5. Ctrl+Alt+P (Cmd+Alt+P on Mac) toggles the edge deck globally. A conflicting registration is reported in the tray menu. Left/right docking is saved. Leaving the deck collapses it unless a new-note form is open.
 6. Pin, color, archive/restore, append text or export JSON in a floating note. Text additions preserve existing rich content. Refresh the deck to see changes from other devices; reopen a floating window to refresh its contents. There is no live multi-device editing/conflict merge.
-7. Tray options hide/resume overlays, open the workspace, configure launch at sign-in for packaged apps, or quit. Closing the workspace leaves the tray companion running. Launch at sign-in is off unless you enable it.
+7. Tray options hide/resume overlays, open the workspace, configure launch at sign-in for packaged apps, or quit. Closing the workspace leaves the tray companion running. Launch at sign-in is off unless you enable it; enabled startup runs in the background.
 
 ## Development and packaging
 

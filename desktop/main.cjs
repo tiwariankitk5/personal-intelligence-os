@@ -8,6 +8,7 @@ let edge,workspace,tray,side='right',expanded=false,quitting=false,shortcutReady
 const notes=new Map();
 let cookieReloadTimer;
 const hidden=process.argv.includes('--hidden');
+const background=process.argv.includes('--background');
 app.setPath('userData',path.join(app.getPath(hidden?'temp':'appData'),hidden?'PIOS-Peek-test':'PIOS-Peek'));
 const settingsFile=path.join(app.getPath('userData'),'preferences.json');
 try{const saved=JSON.parse(fs.readFileSync(settingsFile,'utf8'));if(['left','right'].includes(saved.side))side=saved.side;}catch{}
@@ -30,14 +31,14 @@ function buildMenu(){tray.setContextMenu(Menu.buildFromTemplate([
   {label:'Show Peek notes',click:showEdge}, {label:'Open PIOS / sign in',click:workspaceWindow},
   {label:'Dock edge',submenu:['left','right'].map(value=>({label:value,type:'radio',checked:side===value,click:()=>{side=value;saveSide();resizeEdge(expanded);buildMenu();}}))},
   {label:paused?'Resume overlays':'Hide all overlays',click:()=>{paused=!paused;if(paused){edge.hide();for(const win of notes.values())win.hide();}else{edge.showInactive();for(const win of notes.values())win.showInactive();}buildMenu();}},
-  {label:'Launch at sign-in',type:'checkbox',enabled:app.isPackaged,checked:app.isPackaged&&app.getLoginItemSettings().openAtLogin,click:item=>app.setLoginItemSettings({openAtLogin:item.checked,args:[]})},
+  {label:'Launch at sign-in',type:'checkbox',enabled:app.isPackaged,checked:app.isPackaged&&app.getLoginItemSettings().openAtLogin,click:item=>app.setLoginItemSettings({openAtLogin:item.checked,args:['--background']})},
   {label:shortcutReady?'Shortcut: Ctrl/Cmd+Alt+P':'Shortcut unavailable (use tray)',enabled:false},
   {type:'separator'},{label:'Quit PIOS Peek',click:()=>{quitting=true;app.quit();}}
 ]));}
 function trusted(event){const win=BrowserWindow.fromWebContents(event.sender);return win&&event.senderFrame===event.sender.mainFrame&&trustedFrame(event.senderFrame.url,origin)&&(win===edge||[...notes.values()].includes(win));}
 function ipc(channel,handler){ipcMain.handle(channel,(event,value)=>{if(!trusted(event))throw new Error('Untrusted Peek request');return handler(event,value);});}
 if(!app.requestSingleInstanceLock())app.quit();else{
-app.on('second-instance',()=>{if(edge)showEdge();});
+app.on('second-instance',()=>{if(edge)showEdge();workspaceWindow();});
 app.whenReady().then(()=>{
   const sess=session.fromPartition(partition);
   sess.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));
@@ -62,6 +63,7 @@ app.whenReady().then(()=>{
   });
   tray=new Tray(nativeImage.createFromPath(path.join(__dirname,'tray.png')));tray.setToolTip('PIOS Peek notes');tray.on('click',showEdge);
   shortcutReady=globalShortcut.register('CommandOrControl+Alt+P',()=>{if(edge.isVisible()&&expanded){resizeEdge(false);}else showEdge();});buildMenu();
+  if(!hidden&&!background)workspaceWindow();
 }).catch(error=>{console.error(error.message);app.quit();});
 app.on('window-all-closed',()=>{});
 app.on('before-quit',()=>{quitting=true;});
