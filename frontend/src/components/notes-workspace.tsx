@@ -7,6 +7,7 @@ import { Icon } from "@/components/icon";
 import type { NoteFolder, NoteColor, PiosNote } from "@/lib/notes";
 import { plainTextFromHtml, sanitizeNoteHtml, suggestNoteDestination } from "@/lib/notes";
 import DraftStudio from "./draft-studio";
+import NotesWorkspaceLayout from "./notes-workspace-layout";
 import { sendChat } from "@/lib/api";
 
 type NotesWorkspaceProps = {
@@ -14,6 +15,8 @@ type NotesWorkspaceProps = {
   folders: NoteFolder[];
   onNotesChange: (notes: PiosNote[]) => void | Promise<boolean>;
   onFoldersChange: (folders: NoteFolder[]) => void;
+  onDeleteFolder?: (id: string) => Promise<boolean>;
+  onDeleteNote?: (id: string) => Promise<boolean>;
   onQuickCapture: () => void;
   onToast: (message: string) => void;
 };
@@ -168,7 +171,7 @@ export function QuickCaptureModal({ folders, notes, onClose, onSave }: QuickCapt
   </div>;
 }
 
-export default function NotesWorkspace({ notes, folders, onNotesChange, onFoldersChange, onQuickCapture, onToast }: NotesWorkspaceProps) {
+export default function NotesWorkspace({ notes, folders, onNotesChange, onFoldersChange, onDeleteFolder, onDeleteNote, onQuickCapture, onToast }: NotesWorkspaceProps) {
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [filter, setFilter] = useState<"active" | "pinned" | "archived">("active");
   const [search, setSearch] = useState("");
@@ -181,6 +184,7 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const searchRef = useRef<HTMLInputElement>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [folderDialog, setFolderDialog] = useState(false);
+  const [deletingFolder, setDeletingFolder] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [showDestination, setShowDestination] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -584,9 +588,30 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
     const copy: PiosNote = { ...selected, id: crypto.randomUUID(), title: selected.title + " (copy)", pinned: false, archived: false, updatedAt: "Just now", order: Date.now() };
     onNotesChange([copy, ...notes]); setSelectedId(copy.id); setMoreOpen(false); onToast("Note duplicated.");
   };
-  const deletePermanently = async () => {
-    if (!selected || !window.confirm('Permanently delete "' + selected.title + '"? This cannot be undone.')) return;
-    if (await onNotesChange(notes.filter((note) => note.id !== selected.id)) === false) return; setSelectedId(null); setMoreOpen(false); onToast("Note permanently deleted.");
+  const deleteNote = async (note: PiosNote) => {
+    if (!window.confirm('Permanently delete "' + note.title + '"? This cannot be undone.')) return;
+    clearTimeout(autosaveTimer.current);
+    if (note.id !== selectedId && !await saveLatest.current()) return;
+    const removed = onDeleteNote ? await onDeleteNote(note.id) : await onNotesChange(notes.filter((row) => row.id !== note.id));
+    if (removed === false) return;
+    if (note.id === selectedId) setSelectedId(null);
+    setMoreOpen(false); onToast("Note permanently deleted.");
+  };
+  const deletePermanently = () => selected && deleteNote(selected);
+  const removeFolder = async (folder: NoteFolder) => {
+    if (deletingFolder || !window.confirm('Delete folder "' + folder.name + '"? Its notes will move to Inbox.')) return;
+    setDeletingFolder(true);
+    try {
+      clearTimeout(autosaveTimer.current);
+      if (!await saveLatest.current()) return;
+      if (onDeleteFolder) { if (!await onDeleteFolder(folder.id)) return; }
+      else {
+        if (await onNotesChange(notes.map((note) => note.folderId === folder.id ? { ...note, folderId: inboxFolderId } : note)) === false) return;
+        onFoldersChange(folders.filter((row) => row.id !== folder.id));
+      }
+      if (selectedFolderId === folder.id) setSelectedFolderId(inboxFolderId);
+      onToast("Folder deleted. Its notes are in Inbox.");
+    } finally { setDeletingFolder(false); }
   };
   const toggleFullscreen = async () => {
     const expand = !editorExpanded;
@@ -607,13 +632,16 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const folderTitle = selectedFolderId === "all" ? "All notes" : folders.find((folder) => folder.id === selectedFolderId)?.name ?? "Notes";
   const currentFolderId = selected?.folderId || inboxFolderId;
 
-  return <div className="notes-workspace">
+  return <NotesWorkspaceLayout>
     <aside className="notes-folder-pane">
       <div className="notes-pane-heading"><span>YOUR NOTES</span><button className="icon-button" onClick={onQuickCapture} aria-label="Create a note"><Icon name="plus" size={16}/></button></div>
       <button className={`notes-folder-row ${selectedFolderId === "all" ? "active" : ""}`} onClick={() => setSelectedFolderId("all")}><Icon name="layers" size={16}/><span>All notes</span><b>{notes.filter((note) => !note.archived).length}</b></button>
       <button className={`notes-folder-row ${selectedFolderId === inboxFolderId ? "active" : ""}`} onClick={() => setSelectedFolderId(inboxFolderId)}><Icon name="inbox" size={16}/><span>Inbox</span><b>{notes.filter((note) => note.folderId === inboxFolderId && !note.archived).length}</b></button>
       <div className="notes-folder-subhead"><span>FOLDERS</span><button onClick={() => setFolderDialog(true)} aria-label="Create folder"><Icon name="plus" size={14}/></button></div>
-      {folders.filter((folder) => folder.id !== inboxFolderId).map((folder) => <button key={folder.id} className={`notes-folder-row ${selectedFolderId === folder.id ? "active" : ""}`} onClick={() => setSelectedFolderId(folder.id)}><span className="folder-color-dot" style={{ background: folder.color }}/><span>{folder.name}</span><b>{notes.filter((note) => note.folderId === folder.id && !note.archived).length}</b></button>)}
+      {folders.filter((folder) => folder.id !== inboxFolderId).map((folder) => <div className="notes-folder-item" key={folder.id}>
+        <button className={`notes-folder-row ${selectedFolderId === folder.id ? "active" : ""}`} onClick={() => setSelectedFolderId(folder.id)}><span className="folder-color-dot" style={{ background: folder.color }}/><span>{folder.name}</span><b>{notes.filter((note) => note.folderId === folder.id && !note.archived).length}</b></button>
+        <button type="button" className="notes-delete-button" title={`Delete folder ${folder.name}`} aria-label={`Delete folder ${folder.name}`} disabled={deletingFolder} onClick={() => void removeFolder(folder)}><Icon name="trash" size={12}/></button>
+      </div>)}
       <div className="notes-folder-bottom"><div><Icon name="shield-check" size={15}/><span>Synced to your PIOS account</span></div><small>Stored in your PIOS database</small></div>
     </aside>
 
@@ -622,11 +650,11 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       <div className="notes-search"><Icon name="search" size={15}/><input ref={searchRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your notes..."/><kbd>⌘ F</kbd></div>
       <div className="notes-list-toolbar"><div className="notes-filter-tabs"><button className={filter === "active" ? "active" : ""} onClick={() => setFilter("active")}>All</button><button className={filter === "pinned" ? "active" : ""} onClick={() => setFilter("pinned")}>Pinned</button><button className={filter === "archived" ? "active" : ""} onClick={() => setFilter("archived")}>Archived</button></div><select aria-label="Sort notes" value={sort} onChange={(event) => setSort(event.target.value)}><option value="manual">My order</option><option value="recent">Recently updated</option><option value="oldest">Oldest</option><option value="title">Title</option></select></div>
       <div className="notes-card-list">
-        {visibleNotes.map((note) => <button key={note.id} aria-label={note.title} draggable onDragStart={() => setDraggedId(note.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(note.id)} onDragEnd={() => setDraggedId(null)} className={`note-list-card ${note.color} ${selectedId === note.id ? "selected" : ""} ${draggedId === note.id ? "dragging" : ""}`} onClick={async () => { clearTimeout(autosaveTimer.current); if (await saveLatest.current()) setSelectedId(note.id); }}>
+        {visibleNotes.map((note) => <div className="notes-card-item" key={note.id}><button aria-label={note.title} draggable onDragStart={() => setDraggedId(note.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => reorder(note.id)} onDragEnd={() => setDraggedId(null)} className={`note-list-card ${note.color} ${selectedId === note.id ? "selected" : ""} ${draggedId === note.id ? "dragging" : ""}`} onClick={async () => { clearTimeout(autosaveTimer.current); if (await saveLatest.current()) setSelectedId(note.id); }}>
           <div className="note-list-card-top"><span>{note.pinned && <Icon name="pin" size={12}/>}<span>{folders.find((folder) => folder.id === note.folderId)?.name ?? "Inbox"}</span></span><span className="note-card-time">{note.updatedAt}</span></div>
           <strong>{note.title}</strong><p>{note.plainText || "No additional text"}</p>
           <div className="note-list-card-bottom"><span>{Math.max(1, Math.ceil(note.plainText.length / 240))} min read</span><span className="drag-handle" title="Drag to reorder"><Icon name="grip" size={14}/></span></div>
-        </button>)}
+        </button><button type="button" className="notes-delete-button" title={`Delete note ${note.title}`} aria-label={`Delete note ${note.title}`} onClick={() => void deleteNote(note)}><Icon name="trash" size={13}/></button></div>)}
         {visibleNotes.length === 0 && <div className="notes-empty"><div><Icon name="sticky-note" size={22}/></div><strong>No notes here yet</strong><p>Create a note or change the current filters.</p><button className="button button-secondary button-small" onClick={onQuickCapture}>Create a note</button></div>}
       </div>
     </section>
@@ -687,5 +715,5 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
       </section>
     </div>}
     {folderDialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setFolderDialog(false); }}><form className="modal new-folder-modal" onSubmit={createFolder}><div className="modal-header"><div><div className="eyebrow">ORGANISE YOUR KNOWLEDGE</div><h2>Create a folder</h2><p>Folders keep related notes together.</p></div><button className="icon-button" type="button" onClick={() => setFolderDialog(false)}><Icon name="x"/></button></div><label htmlFor="folder-name">Folder name</label><input id="folder-name" autoFocus value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="e.g. Java Concurrency"/><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setFolderDialog(false)}>Cancel</button><button type="submit" className="button button-primary" disabled={!folderName.trim()}><Icon name="plus" size={14}/>Create folder</button></div></form></div>}
-  </div>;
+  </NotesWorkspaceLayout>;
 }

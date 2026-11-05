@@ -9,7 +9,7 @@ import { createNoteWriter } from "@/lib/note-writer";
 import type { NoteFolder, PiosNote } from "@/lib/notes";
 import {
   ApiChatResponse, ApiFolder, ApiNote, ApiObjective, ApiProvider, ApiSource, ApiUser,
-  clearToken, createFolder, createNote, createObjective, createTextSource, deleteObjective,
+  clearToken, createFolder, deleteFolder, createNote, createObjective, createTextSource, deleteObjective,
   getFolders, getMe, getNotes, getObjectives, getProviders, getSources, removeNote,
   removeSource, sendChat, signIn, signUp, signOut, updateNote, updateObjectiveProgress, uploadSource,
 } from "@/lib/api";
@@ -167,6 +167,22 @@ export default function PiosConnectedApp() {
     return noteWriter.save(nextNotes);
   }
 
+  async function removeFolder(id: string) {
+    const inbox = foldersRef.current.find((folder) => folder.name.trim().toLowerCase() === "inbox");
+    if (!inbox || id === inbox.id) return false;
+    const moved = notesRef.current.map((note) => note.folderId === id ? { ...note, folderId: inbox.id } : note);
+    if (!await persistNotes(moved)) return false;
+    try {
+      await deleteFolder(id);
+      const next = foldersRef.current.filter((folder) => folder.id !== id);
+      foldersRef.current = next; setFolders(next);
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Folder could not be deleted. Notes remain in Inbox.");
+      return false;
+    }
+  }
+
   async function persistFolders(nextFolders: NoteFolder[]) {
     const previous = foldersRef.current;
     foldersRef.current = nextFolders; setFolders(nextFolders);
@@ -285,7 +301,7 @@ export default function PiosConnectedApp() {
       <div className="pios-page-content">
         {activeView === "overview" && <section className="pios-view"><div className="pios-page-heading"><div><div className="pios-eyebrow">YOUR PERSONAL INTELLIGENCE WORKSPACE</div><h1>Good to see you, {user.displayName.split(" ")[0]}.</h1><p>Your knowledge, learning and AI tools in one private workspace.</p></div><button className="pios-primary-button small" onClick={() => setQuickCaptureOpen(true)}><Icon name="plus" size={15}/>Capture a thought</button></div><div className="pios-stat-grid"><Stat label="Notes" value={String(activeNotes)} sub={`${pinnedNotes} pinned`} icon="sticky-note"/><Stat label="Knowledge sources" value={String(sources.length)} sub="Uploaded to your library" icon="layers"/><Stat label="Learning objectives" value={String(objectives.length)} sub={`${totalProgress}% average progress`} icon="graduation"/><Stat label="AI connections" value={String(providers.length)} sub={providers.find((item) => item.isDefault)?.displayName ?? "No default model"} icon="brain"/></div><div className="pios-overview-grid"><div className="pios-panel"><PanelHeading title="Recent notes" action="Open notes" onAction={() => setActiveView("notes")}/>{notes.filter((note) => !note.archived).slice(0, 5).map((note) => <button className="pios-list-row" key={note.id} onClick={() => setActiveView("notes")}><span className={`pios-note-dot ${note.color}`}/><span><strong>{note.title}</strong><small>{folders.find((folder) => folder.id === note.folderId)?.name ?? "Inbox"} · {note.updatedAt}</small></span><Icon name="arrow-up-right" size={14}/></button>)}{!activeNotes && <Empty title="No notes yet" body="Use Quick Capture to create your first note." action="Capture note" onClick={() => setQuickCaptureOpen(true)}/>}</div><div className="pios-panel"><PanelHeading title="Learning progress" action="View learning" onAction={() => setActiveView("learning")}/>{objectives.slice(0, 4).map((objective) => <div className="pios-progress-row" key={objective.id}><div><strong>{objective.title}</strong><span>{objective.category}</span></div><b>{objective.progress}%</b><div className="pios-progress-track"><i style={{ width: `${objective.progress}%` }}/></div></div>)}{!objectives.length && <Empty title="No learning objectives" body="Define what you want to master and track progress." action="Add objective" onClick={() => setActiveView("learning")}/>}</div></div><div className="pios-panel pios-ask-banner"><div><span className="pios-eyebrow">ASK YOUR KNOWLEDGE</span><h2>Find the connection you are looking for.</h2><p>Ask questions across your notes and uploaded documents. PIOS retrieves relevant excerpts and cites the material it used.</p><button className="pios-primary-button small" onClick={() => setActiveView("assistant")}><Icon name="sparkles" size={15}/>Ask PIOS</button></div><div className="pios-orbit-art"><span/><span/><span/><b><Icon name="brain" size={27}/></b></div></div></section>}
 
-        {activeView === "notes" && <section className="pios-view"><div className="pios-page-heading"><div><div className="pios-eyebrow">PERSONAL KNOWLEDGE</div><h1>Notes</h1><p>Capture, organise, search, pin and archive your thoughts. Notes are saved to your PIOS account.</p></div><button className="pios-primary-button small" onClick={() => setQuickCaptureOpen(true)}><Icon name="plus" size={15}/>New note</button></div>{dataLoading ? <Loading/> : <NotesWorkspace notes={notes} folders={folders} onNotesChange={persistNotes} onFoldersChange={persistFolders} onQuickCapture={() => setQuickCaptureOpen(true)} onToast={notify}/>}</section>}
+        {activeView === "notes" && <section className="pios-view"><div className="pios-page-heading"><div><div className="pios-eyebrow">PERSONAL KNOWLEDGE</div><h1>Notes</h1><p>Capture, organise, search, pin and archive your thoughts. Notes are saved to your PIOS account.</p></div><button className="pios-primary-button small" onClick={() => setQuickCaptureOpen(true)}><Icon name="plus" size={15}/>New note</button></div>{dataLoading ? <Loading/> : <NotesWorkspace notes={notes} folders={folders} onNotesChange={persistNotes} onFoldersChange={persistFolders} onDeleteFolder={removeFolder} onDeleteNote={(id) => persistNotes(notesRef.current.filter((note) => note.id !== id))} onQuickCapture={() => setQuickCaptureOpen(true)} onToast={notify}/>}</section>}
 
         {activeView === "knowledge" && <section className="pios-view"><div className="pios-page-heading"><div><div className="pios-eyebrow">YOUR SOURCE LIBRARY</div><h1>Knowledge library</h1><p>Documents and text you have uploaded. Content is stored in your private workspace and indexed for AI retrieval.</p></div><button className="pios-primary-button small" onClick={() => setAddSourceOpen(true)}><Icon name="upload" size={15}/>Add source</button></div><div className="pios-library-toolbar"><label className="pios-library-search"><Icon name="search" size={16}/><input value={knowledgeQuery} onChange={(event) => setKnowledgeQuery(event.target.value)} placeholder="Search source titles and collections"/></label><span>{filteredSources.length} sources</span></div><div className="pios-source-grid">{filteredSources.map((source) => <article className="pios-source-card" key={source.id}><div className="pios-source-icon"><Icon name={source.kind === "PDF" ? "file-pdf" : "file-text"} size={20}/></div><div className="pios-source-type">{sourceLabel(source)}</div><h3>{source.title}</h3><p>{source.originalFileName ?? source.collection}</p><div className="pios-source-footer"><span>{relativeTime(source.updatedAt)}</span><button title="Delete source" onClick={() => void removeKnowledgeSource(source.id)}><Icon name="trash-2" size={15}/></button></div></article>)}</div>{!filteredSources.length && <Empty title="Your library is empty" body="Add a PDF, Markdown or text file to make it searchable by PIOS." action="Add source" onClick={() => setAddSourceOpen(true)}/>}</section>}
 

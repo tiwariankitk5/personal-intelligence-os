@@ -35,6 +35,8 @@ Screenshots are local ignored artifacts under `backend/target/`. The distributed
 
 ## Limits and remaining verification
 
+2026-11-05 follow-up: three desktop columns now have pointer/keyboard resize handles and local browser width persistence. Direct folder and note-list delete actions require confirmation; Inbox cannot be deleted and folder notes are preserved in Inbox. A synthetic-account browser run verified creation, both cancellation paths, both confirmed deletions, server state after reload, resized width persistence and minimum editor width on a smaller viewport. Frontend tests/typecheck passed. Screenshots/logs are under ignored `.validation/`.
+
 - Physical iPad/Apple Pencil, pressure/latency/palm rejection, multi-monitor desktop behaviour and offline operation have not been verified. Desktop companion and global shortcuts are not implemented.
 - The PDF action invokes the browser print workflow; a final PDF file has not received a render/layout check.
 - Inline diagram insertion/PNG export, recovery after reload and in-place updates passed browser checks. Library item recovery and larger imported scenes need additional coverage.
