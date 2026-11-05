@@ -4,7 +4,7 @@ import {getMe,getNotes,getFolders,createNote,updateNote,removeNote,clearToken} f
 import type {ApiNote} from "@/lib/api";
 import type {PiosNote} from "@/lib/notes";
 import type {PiosDesktopBridge} from "@/lib/desktop";
-import DesktopNoteEditor from "./desktop-note-editor";
+import FloatingNoteEditor from "./floating-note-editor";
 import "./desktop-peek.css";
 
 export default function DesktopPeek(){
@@ -33,7 +33,7 @@ export default function DesktopPeek(){
     {(noteId||(expanded&&!preview))&&<>
       {!noteId&&<header><strong>PIOS Peek</strong><button aria-label="Collapse Peek notes" onClick={()=>expand(false)}>×</button></header>}
       {error&&<p role="alert">{error} <button onClick={()=>void load()}>Retry</button></p>}
-      {!user?<div className="desktop-peek-login"><p>Sign in to your PIOS account in the companion workspace, then refresh.</p><button onClick={()=>bridge?void bridge.openWorkspace():location.assign("/")}>Open PIOS / sign in</button><button onClick={()=>void load()}>Refresh</button></div>:noteId?(note?<DesktopNoteEditor key={note.id} note={note} onPatch={change} onClose={()=>bridge?void bridge.close():window.close()} onDelete={async()=>{try{await removeNote(note.id);setNotes(rows=>rows.filter(n=>n.id!==note.id));void bridge?.refreshDeck?.();return true;}catch(e){setError(e instanceof Error?e.message:"Could not delete note.");return false;}}}/>:<p>This note is unavailable. <button onClick={()=>void load()}>Refresh</button></p>):<>
+      {!user?<div className="desktop-peek-login"><p>Sign in to your PIOS account in the companion workspace, then refresh.</p><button onClick={()=>bridge?void bridge.openWorkspace():location.assign("/")}>Open PIOS / sign in</button><button onClick={()=>void load()}>Refresh</button></div>:noteId?(note?<FloatingNoteEditor key={note.id} note={note} onPatch={change} onClose={()=>bridge?void bridge.close():window.close()} onDelete={async()=>{try{await removeNote(note.id);setNotes(rows=>rows.filter(n=>n.id!==note.id));void bridge?.refreshDeck?.();return true;}catch(e){setError(e instanceof Error?e.message:"Could not delete note.");return false;}}}/>:<p>This note is unavailable. <button onClick={()=>void load()}>Refresh</button></p>):<>
         <div className="desktop-peek-controls"><button onClick={()=>setCreating(!creating)}>+ New note</button><button disabled={busy} onClick={()=>void load()}>Refresh</button><button onClick={()=>void bridge?.side("left")}>Left</button><button onClick={()=>void bridge?.side("right")}>Right</button><button onClick={()=>void bridge?.openWorkspace()}>Workspace</button></div>
         {creating&&<form onSubmit={e=>{e.preventDefault();void create();}}><label>Title<input required maxLength={240} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>Note<textarea maxLength={10000} value={body} onChange={e=>setBody(e.target.value)}/></label><button disabled={busy||!title.trim()}>Save new note</button></form>}
         <input aria-label="Search desktop notes" placeholder="Search your notes…" value={query} onChange={e=>setQuery(e.target.value)}/>

@@ -322,6 +322,12 @@ export default function PiosConnectedApp() {
         notesRef.current = restored; setNotes(restored);
       }
       return ok;
+    }} onDelete={async id => {
+      const owner = user.id, previous = notesRef.current;
+      const next = previous.filter(note => note.id !== id);
+      const ok = await persistNotes(next);
+      if (!ok && activeUserRef.current === owner && notesRef.current === next) { notesRef.current = previous; setNotes(previous); }
+      return ok;
     }} onRefresh={async () => { if (await noteWriter.save(notesRef.current)) await loadWorkspace(); }}/>
     {toast && <div className="pios-toast"><Icon name="info" size={15}/>{toast}</div>}
   </div>;
