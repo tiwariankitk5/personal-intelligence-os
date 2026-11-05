@@ -166,3 +166,7 @@ pios-v1-fullstack/
 ## Developer setup without Docker
 
 Requires Java 21, Maven 3.6.3+, Node.js 22.16.0 and PostgreSQL 16 with the pgvector extension. Create a database named `pios`, then set the environment variables from `.env.example`. Run the backend with `mvn spring-boot:run` from `backend`, then run `npm.cmd install` and `npm.cmd run dev` from `frontend` on Windows. If PowerShell blocks `npm.ps1`, use `npm.cmd` as shown. The browser frontend uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1`.
+
+## Recover on another device
+
+See [docs/RECOVERY.md](docs/RECOVERY.md) for encrypted saved-data snapshots, protected GitHub recovery-key retrieval, and restoration into a fresh Docker project. Source/lockfiles rebuild dependencies; private release assets preserve the Windows companion and encrypted database/uploads/configuration. Do not commit raw .env files, database dumps, or recovery keys.

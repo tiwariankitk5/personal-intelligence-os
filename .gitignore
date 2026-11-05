@@ -32,3 +32,6 @@ coverage/
 
 # Windows files
 Thumbs.db
+
+# Private recovery bundles, plaintext staging and recovery keys
+.recovery/
