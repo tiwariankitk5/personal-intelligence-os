@@ -24,3 +24,17 @@ Run node scripts/pios-recovery.mjs backup --publish-key --output .recovery/snaps
 Verify with the command above, then upload the encrypted snapshot/checksum to a new private prerelease: gh release create NEW_TAG BACKUP_FILE BACKUP_FILE.sha256 --repo tiwariankitk5/personal-intelligence-os --target COMMIT_SHA --prerelease --latest=false --title 'PIOS recovery snapshot' --notes-file RELEASE_NOTES_FILE. Do not upload raw .env, raw database dumps or plaintext recovered keys. Never overwrite an older known-good recovery snapshot.
 
 GitHub stores the current snapshot, not future unsaved work. Commit/push new source changes and create another data snapshot when needed. This is not a scheduled/live backup service. Browser-only layout preferences and expired sign-in cookies are not recovery data. Desktop side preference may be chosen again. Dependencies and images are rebuilt from committed manifests/lockfiles; physical Mac/mobile behavior is not certified by a Windows restore drill.
+
+## Reinstall optional browser-test tools
+
+Run npm ci --prefix tools/browser after cloning; the exact Playwright dependency and lockfile are committed. Windows smoke scripts use an installed Microsoft Edge browser. These development dependencies are rebuilt rather than backed up as node_modules. The native smoke also needs npm ci --prefix desktop and the Electron install script if npm lifecycle scripts were disabled.
+
+## Verified recovery snapshot — 2026-11-06
+
+The private prerelease pios-recovery-2026-11-06 includes pios-data-2026-11-06.piosbackup, its checksum, the source Git bundle, Windows portable ZIP, demo/previews ZIP and a verification report. The snapshot authenticated all 148 payload file checksums. A fresh pios-recovery-validation project restored the database with matching row counts/content digests and matching upload hashes, preserved the three original application secrets, and returned HTTP 200 for API and frontend. Restored embedding workers were disabled. The key was recovered through the private GitHub workflow and matched the local key.
+
+Fresh clone command for this snapshot:
+
+git clone --branch pios-recovery-2026-11-06 https://github.com/tiwariankitk5/personal-intelligence-os.git
+
+Use pios-data-2026-11-06.piosbackup as BACKUP_FILENAME in the steps above. The release is a recovery snapshot, not a public production release.

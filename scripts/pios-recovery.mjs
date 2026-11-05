@@ -20,41 +20,80 @@ if (!/^[\w.-]+\/[\w.-]+$/.test(repo))
 const childEnv = { ...process.env };
 delete childEnv.GH_DEBUG;
 delete childEnv.DEBUG;
-function run(exe, argv, { input, log } = {}) { try {
-    const output = execFileSync(exe, argv, { cwd: root, input, env: childEnv, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    if (log)
-        fs.writeFileSync(log, output);
-    return output.trim();
+function run(exe, argv, { input, log } = {}) {
+    try {
+        const output = execFileSync(exe, argv, { cwd: root, input, env: childEnv, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+        if (log)
+            fs.writeFileSync(log, output);
+        return output.trim();
+    }
+    catch (error) {
+        if (log)
+            fs.writeFileSync(log, (error.stdout || '') + '\n' + (error.stderr || ''));
+        throw new Error(exe + ' failed' + (log ? '; details in ' + path.relative(root, log) : ''));
+    }
 }
-catch (error) {
-    if (log)
-        fs.writeFileSync(log, (error.stdout || '') + '\n' + (error.stderr || ''));
-    throw new Error(exe + ' failed' + (log ? '; details in ' + path.relative(root, log) : ''));
-} }
 function compose(project, envFile, ...argv) { return run('docker', ['compose', '--env-file', envFile, '-p', project, ...argv]); }
-function projectName(value) { if (!/^[a-z0-9][a-z0-9_-]+$/.test(value))
-    throw new Error('Invalid Compose project.'); return value; }
-function safeRemoveWork(dir) { const resolved = path.resolve(dir); if (!resolved.startsWith(privateRoot + path.sep) || !path.basename(resolved).startsWith('work-'))
-    throw new Error('Refusing unsafe cleanup.'); fs.rmSync(resolved, { recursive: true, force: true }); }
-function assertPrivate() { const data = JSON.parse(run('gh', ['api', 'repos/' + repo])); if (!data.private)
-    throw new Error('Recovery publishing/key operations require a private repository.'); return data; }
+function projectName(value) {
+    if (!/^[a-z0-9][a-z0-9_-]+$/.test(value))
+        throw new Error('Invalid Compose project.');
+    return value;
+}
+function safeRemoveWork(dir) {
+    const resolved = path.resolve(dir);
+    if (!resolved.startsWith(privateRoot + path.sep) || !path.basename(resolved).startsWith('work-'))
+        throw new Error('Refusing unsafe cleanup.');
+    fs.rmSync(resolved, { recursive: true, force: true });
+}
+function assertPrivate() {
+    const data = JSON.parse(run('gh', ['api', 'repos/' + repo]));
+    if (!data.private)
+        throw new Error('Recovery publishing/key operations require a private repository.');
+    return data;
+}
 async function pipe(exe, argv, destination) { const output = fs.createWriteStream(destination, { flags: 'wx', mode: 0o600 }); const child = spawn(exe, argv, { cwd: root, env: childEnv, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let errors = ''; child.stderr.on('data', chunk => { errors += chunk; }); const exited = new Promise((resolve, reject) => { child.on('error', reject); child.on('close', code => code === 0 ? resolve() : reject(new Error(exe + ' backup command failed'))); }); await Promise.all([pipeline(child.stdout, output), exited]); }
-function port(project, envFile, service, containerPort) { const result = compose(project, envFile, 'port', service, String(containerPort)); const value = Number(result.match(/:(\d+)$/)?.[1]); if (!value)
-    throw new Error('Cannot determine ' + service + ' port.'); return value; }
-function tableState(project, envFile) { const tables = compose(project, envFile, 'exec', '-T', 'db', 'psql', '-U', 'pios', '-d', 'pios', '-At', '-c', "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename").split(/\r?\n/).filter(Boolean); const result = {}; for (const table of tables) {
-    const quoted = '"' + table.replaceAll('"', '""') + '"';
-    result[table] = JSON.parse(compose(project, envFile, 'exec', '-T', 'db', 'psql', '-U', 'pios', '-d', 'pios', '-At', '-c', "SELECT json_build_object('count',count(*),'digest',md5(coalesce(string_agg(to_jsonb(t)::text,chr(10) ORDER BY to_jsonb(t)::text),''))) FROM public." + quoted + ' t'));
-} return result; }
-function checkTar(file, compressed = false) { validateArchiveNames(run('tar', [compressed ? '-tzf' : '-tf', file])); const verbose = run('tar', [compressed ? '-tvzf' : '-tvf', file]); for (const line of verbose.split(/\r?\n/).filter(Boolean))
-    if (!/^[-d]/.test(line))
-        throw new Error('Only regular files and directories are allowed in recovery archives.'); }
+function port(project, envFile, service, containerPort) {
+    const result = compose(project, envFile, 'port', service, String(containerPort));
+    const value = Number(result.match(/:(\d+)$/)?.[1]);
+    if (!value)
+        throw new Error('Cannot determine ' + service + ' port.');
+    return value;
+}
+function tableState(project, envFile) {
+    const tables = compose(project, envFile, 'exec', '-T', 'db', 'psql', '-U', 'pios', '-d', 'pios', '-At', '-c', "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename").split(/\r?\n/).filter(Boolean);
+    const result = {};
+    for (const table of tables) {
+        const quoted = '"' + table.replaceAll('"', '""') + '"';
+        result[table] = JSON.parse(compose(project, envFile, 'exec', '-T', 'db', 'psql', '-U', 'pios', '-d', 'pios', '-At', '-c', "SELECT json_build_object('count',count(*),'digest',md5(coalesce(string_agg(to_jsonb(t)::text,chr(10) ORDER BY to_jsonb(t)::text),''))) FROM public." + quoted + ' t'));
+    }
+    return result;
+}
+function checkTar(file, compressed = false) {
+    validateArchiveNames(run('tar', [compressed ? '-tzf' : '-tf', file]));
+    const verbose = run('tar', [compressed ? '-tvzf' : '-tvf', file]);
+    for (const line of verbose.split(/\r?\n/).filter(Boolean))
+        if (!/^[-d]/.test(line))
+            throw new Error('Only regular files and directories are allowed in recovery archives.');
+}
 async function workDir() { await fsp.mkdir(privateRoot, { recursive: true }); return fsp.mkdtemp(path.join(privateRoot, 'work-')); }
-async function unpack(archive, keyFile, dir) { const tar = path.join(dir, 'payload.tar'); await decrypt(path.resolve(archive), tar, readKey(keyFile)); checkTar(tar); const payload = path.join(dir, 'payload'); fs.mkdirSync(payload); run('tar', ['-xf', tar, '-C', payload]); const manifest = JSON.parse(fs.readFileSync(path.join(payload, 'manifest.json'), 'utf8')); if (manifest.format !== 'pios-recovery-v1')
-    throw new Error('Unsupported manifest.'); for (const [name, expected] of Object.entries(manifest.files)) {
-    validateArchiveNames(name);
-    if (await sha256(path.join(payload, name)) !== expected)
-        throw new Error('Backup checksum mismatch.');
-} checkTar(path.join(payload, 'uploads.tar.gz'), true); return { payload, manifest }; }
+async function unpack(archive, keyFile, dir) {
+    const tar = path.join(dir, 'payload.tar');
+    await decrypt(path.resolve(archive), tar, readKey(keyFile));
+    checkTar(tar);
+    const payload = path.join(dir, 'payload');
+    fs.mkdirSync(payload);
+    run('tar', ['-xf', tar, '-C', payload]);
+    const manifest = JSON.parse(fs.readFileSync(path.join(payload, 'manifest.json'), 'utf8'));
+    if (manifest.format !== 'pios-recovery-v1')
+        throw new Error('Unsupported manifest.');
+    for (const [name, expected] of Object.entries(manifest.files)) {
+        validateArchiveNames(name);
+        if (await sha256(path.join(payload, name)) !== expected)
+            throw new Error('Backup checksum mismatch.');
+    }
+    checkTar(path.join(payload, 'uploads.tar.gz'), true);
+    return { payload, manifest };
+}
 async function backup() {
     const project = projectName(options.project || 'personal-intelligence-os'), envFile = path.join(root, '.env');
     if (!fs.existsSync(envFile))
@@ -144,13 +183,16 @@ async function backup() {
         safeRemoveWork(dir);
     }
 }
-async function verify() { const dir = await workDir(); try {
-    const { manifest } = await unpack(options.input, options['key-file'], dir);
-    console.log('Verified authenticated backup and ' + Object.keys(manifest.files).length + ' payload checksums.');
+async function verify() {
+    const dir = await workDir();
+    try {
+        const { manifest } = await unpack(options.input, options['key-file'], dir);
+        console.log('Verified authenticated backup and ' + Object.keys(manifest.files).length + ' payload checksums.');
+    }
+    finally {
+        safeRemoveWork(dir);
+    }
 }
-finally {
-    safeRemoveWork(dir);
-} }
 async function restore() {
     const project = projectName(options.project || 'pios-recovered');
     if (run('docker', ['ps', '-aq', '--filter', 'label=com.docker.compose.project=' + project]) || run('docker', ['volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project=' + project]))
@@ -204,6 +246,21 @@ async function restore() {
         fs.mkdirSync(uploads);
         run('tar', ['-xzf', path.join(payload, 'uploads.tar.gz'), '-C', uploads]);
         run('docker', ['cp', uploads + path.sep + '.', backend + ':/app/data/uploads']);
+        const copied = path.join(dir, 'verify-uploads');
+        fs.mkdirSync(copied);
+        run('docker', ['cp', backend + ':/app/data/uploads/.', copied]);
+        async function fileHashes(folder, prefix = '') { const result = {}; for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+            const name = prefix + entry.name;
+            if (entry.isDirectory())
+                Object.assign(result, await fileHashes(path.join(folder, entry.name), name + '/'));
+            else if (entry.isFile())
+                result[name] = await sha256(path.join(folder, entry.name));
+            else
+                throw new Error('Unexpected upload file type.');
+        } return Object.fromEntries(Object.entries(result).sort(([a], [b]) => a.localeCompare(b))); }
+        if (JSON.stringify(await fileHashes(uploads)) !== JSON.stringify(await fileHashes(copied)))
+            throw new Error('Restored upload bytes do not match the snapshot.');
+        console.log('Restored upload hashes matched the snapshot.');
         const artifacts = path.join(privateRoot, 'restored', project);
         fs.mkdirSync(artifacts, { recursive: true });
         for (const name of ['evidence', 'references'])

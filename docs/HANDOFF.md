@@ -32,3 +32,8 @@ Updated: 2026-11-05. Replace stale status at milestone boundaries; do not append
 Validation note: repeated normal-stack synthetic registrations reached its IP signup quota; remaining checks moved to disposable pios-peek-web-validation on 3130/8280/5632. Test scripts now default to isolated ports. Preserve the normal user database and quota configuration.
 
 Latest motion/folder checks passed on disposable pios-peek-style-validation (3130/8280/5632); remove that project/volumes after verification. Normal app remains personal-intelligence-os (3100/8180/5532).
+
+## Recovery setup — 2026-11-06
+- Recovery scripts: scripts/pios-recovery.mjs, recover-github-key.mjs; guide docs/RECOVERY.md. Private release pios-recovery-2026-11-06 holds encrypted DB/uploads/.env/evidence/reference backup, source bundle and portable build. PIOS_RECOVERY_KEY is stored only as a protected GitHub repository secret and ignored local key files. Never commit private recovery data/keys.
+- Encryption/tamper/path tests passed; 148 payload checksums verified. Protected key retrieval tested and temporary cloud key artifact/branch deleted. Restore into fresh pios-recovery-validation matched table contents/upload hashes and preserved original app secrets; API/frontend both returned 200. Workers disabled during verification. Normal app restarted and may require sign-in.
+- Browser-test manifests are pinned under tools/browser; npm ci --prefix tools/browser reinstalls them. Caches remain ignored. Snapshots are manual; later source/data changes require another push/snapshot.
