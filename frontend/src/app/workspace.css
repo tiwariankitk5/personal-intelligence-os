@@ -9,5 +9,18 @@
   margin:0;
   padding:28px clamp(16px,2vw,32px) 32px;
 }
-@media(min-width:1000px){.notes-workspace{height:calc(100dvh - 210px);min-height:360px}.notes-folder-pane,.notes-list-pane,.note-editor-pane{min-height:0;overflow:auto;overscroll-behavior:contain}.note-editor-toolbar-top{position:sticky;top:0;z-index:20;background:#fff;flex-shrink:0}.note-editor-content{flex-shrink:0}.notes-card-list{min-height:0;overflow:auto}}
-@media(min-width:1000px) and (max-width:1399px){.notes-workspace{grid-template-columns:210px minmax(0,1fr);grid-template-rows:125px minmax(0,1fr)}.notes-folder-pane{grid-column:1;grid-row:1;border-bottom:1px solid #e5ece6}.notes-list-pane{grid-column:1;grid-row:2}.note-editor-pane{grid-column:2;grid-row:1 / span 2;border-top:0}.note-editor-content{padding:22px}.notes-list-header{padding:12px}.notes-folder-bottom{display:none}}
+@media(min-width:1000px){
+  .notes-workspace{height:calc(100dvh - 230px);min-height:360px;grid-template-columns:150px 210px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .notes-folder-pane,.note-editor-pane{min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin}
+  .notes-folder-pane>*{flex-shrink:0}
+  .notes-list-pane{min-height:0;overflow:hidden}
+  .notes-list-header{padding:14px 12px;flex-wrap:wrap}
+  .notes-list-header,.notes-search,.notes-list-toolbar{flex-shrink:0}
+  .notes-list-toolbar{flex-wrap:wrap}
+  .notes-card-list{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+  .note-list-card{flex-shrink:0}
+  .note-editor-toolbar-top{position:sticky;top:0;z-index:20;background:#fff;flex-shrink:0;flex-wrap:wrap;padding:10px 14px}
+  .note-editor-content{flex-shrink:0;padding:24px}
+  .note-editor-footer{flex-wrap:wrap}
+}
+@media(min-width:1400px){.notes-workspace{grid-template-columns:175px 260px minmax(0,1fr)}}
