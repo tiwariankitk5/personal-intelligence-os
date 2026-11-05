@@ -24,6 +24,17 @@
   .note-editor-footer{flex-wrap:wrap}
 }
 .notes-workspace{position:relative}
+@media(min-width:1000px){
+  .pios-shell:has(.notes-page-content){height:100dvh;min-height:0;overflow:hidden}
+  .pios-shell:has(.notes-page-content)>.pios-sidebar{height:100dvh;min-height:0;overflow-y:auto}
+  .pios-shell:has(.notes-page-content)>.pios-main{min-height:0}
+  .notes-page-content{min-height:0;max-width:none;padding:16px 16px 12px}
+  .notes-view{height:100%;min-height:0;grid-template-rows:auto minmax(0,1fr);gap:12px}
+  .notes-view>.notes-workspace{height:100%;min-height:0;margin:0}
+  .notes-view>.pios-page-heading h1{margin:3px 0;font-size:23px}
+  .notes-view>.pios-page-heading p,.notes-view>.pios-page-heading .pios-eyebrow{display:none}
+  .pios-shell:has(.notes-page-content) .pios-footer{display:none}
+}
 .notes-column-divider{display:none}
 .notes-folder-item{display:flex;align-items:center;min-width:0;position:relative}
 .notes-folder-item .notes-folder-row{flex:1;min-width:0;padding-right:24px}
@@ -32,8 +43,10 @@
 .notes-delete-button:hover,.notes-delete-button:focus-visible{color:#b43e3e;background:#fff0ef}
 .notes-folder-item>.notes-delete-button{position:absolute;right:0}
 .notes-card-item{position:relative;flex-shrink:0;min-width:0}
-.notes-card-item .note-list-card>strong{padding-right:20px}
-.notes-card-item>.notes-delete-button{position:absolute;right:7px;top:25px}
+.notes-card-item .note-list-card{padding:12px 14px}
+.notes-card-item .note-list-card>strong{margin:0;padding-right:24px;font-size:12px;line-height:1.5}
+.notes-card-item .note-list-card-top,.notes-card-item .note-list-card>p,.notes-card-item .note-list-card-bottom{display:none}
+.notes-card-item>.notes-delete-button{position:absolute;right:7px;top:50%;transform:translateY(-50%)}
 @media(min-width:1000px){
   .notes-column-divider{display:block;position:absolute;top:0;bottom:0;width:9px;margin-left:-5px;z-index:35;cursor:col-resize;touch-action:none;outline:none}
   .divider-0{left:var(--folder-width)}
