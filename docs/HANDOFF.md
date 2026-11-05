@@ -4,21 +4,22 @@ Updated: 2026-11-05. Replace stale status at milestone boundaries; do not append
 
 ## Current state
 - Repository: tiwariankitk5/personal-intelligence-os. Branch: `codex/complete-note-workspace`.
-- Draft PR #3: https://github.com/tiwariankitk5/personal-intelligence-os/pull/3, stacked on production-readiness PR #2. No public deployment or main merge.
-- Notes milestone includes covers/slash commands, persisted editable diagrams, Draft sheets, import/export, serial save/retry and browser sessions/CSRF. Evidence/limits: `docs/EDITOR_VALIDATION.md`.
-- Three desktop columns resize by drag/keyboard and remember browser widths. Folder deletion preserves notes in Inbox; note-list deletion confirms. Notes fill remaining viewport height; cards show title/delete only. Main navigation auto-hides after selecting any tab and reopens from the top-left menu.
-- Authentication safeguards now use shared PostgreSQL counters, source/account quotas and failed-login cooldowns on browser and legacy routes. Logs contain keyed references rather than raw identities or credentials. Details: `docs/AUTH_ABUSE_PROTECTION.md`.
-- Validation: 30 Java tests and frontend tests/typecheck passed. Isolated real PostgreSQL/API smoke passed cooldown recovery, both auth routes, quotas, unknown-account parity and spoofed-forwarding rejection. The disposable smoke deliberately exhausts quotas; never run it on the user's stack.
-- Formatting-toolbar drag sizing fixed by clearing bottom positioning; drag bounds stay on screen. Users choose horizontal or vertical orientation, remembered in the browser. Both layouts and edge dragging passed tablet/phone viewport checks; frontend/backend production builds and normal API smoke passed after local application.
+- Draft PR #3: https://github.com/tiwariankitk5/personal-intelligence-os/pull/3, stacked on production-readiness PR #2. No main merge or public deployment.
+- Notes/editor/Draft milestone and responsive/resizable columns are implemented. Main navigation auto-hides after tab selection. Formatting palette is draggable with saved horizontal/vertical preference. Evidence/limits: `docs/EDITOR_VALIDATION.md`.
+- Shared authentication quotas/cooldowns and redacted audit logging: `docs/AUTH_ABUSE_PROTECTION.md`.
+- New semantic retrieval milestone: opt-in embedding provider/model separate from chat, pgvector + full-text fusion, SQL-triggered chunk refresh, leased/retryable indexing, shared daily embedding budgets, status/rebuild controls and exact passage citations. Configuration and limits: `docs/SEMANTIC_RAG.md`.
+- Validation: 37 Java tests and frontend tests/typecheck/production build passed. Real PostgreSQL/HTTP synthetic-provider smoke passed indexing lifecycle, account isolation, profile rebuilds, failure recovery, duplicate-work protection with two workers and concurrent budget enforcement. Browser checks passed settings, consent, real-model previews and expandable citations; chat generation used a labelled fixture.
+- Real local MiniLM evaluation: 8 synthetic questions, hybrid recall@5/MRR/top-1 0.75 versus keyword 0.50; two misses retained. See `docs/evaluation/`. Do not imply broad production-quality validation or paid-model answer testing.
+- Local V6 upgrade passed content-fingerprint preservation and normal API smoke checks; chunks were backfilled with semantic processing disabled. Final frontend/backend Docker builds passed. Right-edge note shortcuts passed hover, scrolling, keyboard, save-before-switch, failed-save retry, fullscreen and mobile checks; temporary test notes were removed. Exact published CI status remains to be checked.
 
 ## Next work / limits
-- Check CI on the exact latest published commit. Next product milestone: embeddings + pgvector/hybrid retrieval with account isolation and citations.
-- Public release still needs trusted ingress configuration, AI spend/concurrency controls, recovery/verification, backup restore and upload hardening. Auth limits do not complete production readiness.
+- Verify CI on the exact published commit, then expand relevance/abstention evaluation using representative held-out content and the chosen production embedding/chat models.
+- Public release still requires trusted ingress, broader inference concurrency/spend controls, recovery/verification, backup restore and upload isolation. Embedding budgets are not a dollar cap.
 - Physical Apple Pencil/iPad and final PDF rendering remain unverified. YouTube/video ingestion, OAuth/MCP connectors, billing, durable shared sessions and Kubernetes remain open.
-- Requirements: `docs/ACCEPTED_REQUIREMENTS.md`; release blockers: `PRODUCTION_READINESS.md`. Distributed systems source guide: `docs/study-notes/`; current account contents may have been changed by the user.
+- Requirements: `docs/ACCEPTED_REQUIREMENTS.md`; release blockers: `PRODUCTION_READINESS.md`. Distributed systems guide source remains in `docs/study-notes/`; user account contents may have changed.
 
 ## Environment
-- Local user app: http://localhost:3100; API: http://localhost:8180. Verify Compose mappings. Preserve unrelated containers/data.
-- Sessions are in memory; backend restart requires sign-in. No credentials belong in this file.
-- Use AGENTS.md and `.agents/skills/pios-development/SKILL.md`; quiet verifier: `scripts/verify-pios.ps1`.
-- Ignored `.validation/` holds logs, browser checks and screenshots. The temporary `pios-auth-validation` project and its disposable volumes were removed after quota tests; the user stack remains running.
+- Normal local app http://localhost:3100; API http://localhost:8180. Verify Compose mappings. Preserve unrelated containers/data.
+- Sessions are in memory; backend restart requires sign-in. No credentials belong here.
+- Use AGENTS.md and `.agents/skills/pios-development/SKILL.md`; quiet verifier: `scripts/verify-pios.ps1`. Ignored `.validation/` holds test logs/screenshots and optional CPU-model cache.
+- The isolated RAG test project/volumes and test-only provider processes were removed after verification. Test logs/screenshots and the optional CPU-model cache remain ignored; the normal user stack remains running.

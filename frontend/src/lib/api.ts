@@ -21,10 +21,10 @@ export type ApiObjective = {
   id: string; title: string; description: string; category: string; targetDate?: string;
   progress: number; createdAt: string; updatedAt: string;
 };
-export type ApiCitation = { id: string; title: string; type: string };
+export type ApiCitation = { id: string; title: string; type: string; number: number; chunkId: string; chunkIndex: number; excerpt: string };
 export type ApiChatResponse = {
   conversationId: string; answer: string; citations: ApiCitation[]; providerId: string;
-  providerName: string; createdAt: string;
+  providerName: string; createdAt: string; retrievalMode: string; retrievalWarning?: string;
 };
 
 type RequestOptions = RequestInit & { skipAuth?: boolean };
@@ -130,3 +130,17 @@ export async function uploadSource(file: File, collection = "Inbox") {
 }
 export const createTextSource = (title: string, content: string, collection = "Inbox") =>
   apiRequest<ApiSource>("/sources/text", { method: "POST", body: JSON.stringify({ title, content, collection }) });
+
+export type RetrievalStatus = {
+  enabled: boolean; configured: boolean; providerId: string | null; model: string; dimensions: number; requestDimensions: boolean;
+  dailyCallLimit: number; dailyInputLimit: number; documents: number; chunks: number; embeddedChunks: number; truncatedDocuments: number;
+  states: { state: string; count: number }[]; lastError: string | null;
+  usage: { calls: number; reserved_input: number; reported_tokens: number; failed_calls: number };
+};
+export const getRetrievalStatus = () => apiRequest<RetrievalStatus>("/ai/retrieval/settings");
+export const configureRetrieval = (settings: { enabled: boolean; providerId: string | null; model: string; dimensions: number; requestDimensions: boolean; dailyCallLimit: number; dailyInputLimit: number; consent: boolean }) =>
+  apiRequest<RetrievalStatus>("/ai/retrieval/settings", { method: "PUT", body: JSON.stringify(settings) });
+export const retryRetrieval = () => apiRequest<RetrievalStatus>("/ai/retrieval/retry", { method: "POST" });
+export const rebuildRetrieval = () => apiRequest<RetrievalStatus>("/ai/retrieval/rebuild", { method: "POST" });
+export type RetrievedPassage = { chunkId: string; id: string; title: string; type: string; chunkIndex: number; excerpt: string };
+export const searchRetrieval = (query: string) => apiRequest<{ mode: string; warning: string | null; passages: RetrievedPassage[] }>("/ai/retrieval/search", { method: "POST", body: JSON.stringify({ query }) });

@@ -203,7 +203,6 @@ public class PiosDataController {
                     VALUES (?,?,?,?,?,?,?,?,?,?)
                     """, id, userId, title, extension.equals("pdf") ? "PDF" : "Document", cleanCollection(collection),
                     original, storageKey, file.getContentType(), extracted, bytes.length);
-            insertChunks(id, userId, extracted);
             return sourceById(id, userId);
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store or parse the uploaded file.");
@@ -219,7 +218,6 @@ public class PiosDataController {
                 INSERT INTO knowledge_sources(id,user_id,title,kind,collection_name,full_text)
                 VALUES (?,?,?,?,?,?)
                 """, id, userId, request.title().trim(), "Text", cleanCollection(request.collection()), request.content().trim());
-        insertChunks(id, userId, request.content().trim());
         return sourceById(id, userId);
     }
 
@@ -311,16 +309,6 @@ public class PiosDataController {
                 (rs, row) -> new LearningObjectiveResponse(rs.getObject("id", UUID.class), rs.getString("title"),
                         rs.getString("description"), rs.getString("category"), rs.getObject("target_date", LocalDate.class),
                         rs.getInt("progress"), rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()), id, userId);
-    }
-
-    private void insertChunks(UUID sourceId, UUID userId, String text) {
-        int max = 1800;
-        int index = 0;
-        for (int start = 0; start < text.length(); start += max) {
-            String chunk = text.substring(start, Math.min(text.length(), start + max));
-            jdbc.update("INSERT INTO content_chunks(id,user_id,source_id,chunk_index,content) VALUES (?,?,?,?,?)",
-                    UUID.randomUUID(), userId, sourceId, index++, chunk);
-        }
     }
 
     private String extractText(byte[] bytes, String extension) throws IOException {

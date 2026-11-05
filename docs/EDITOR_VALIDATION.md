@@ -35,6 +35,8 @@ Screenshots are local ignored artifacts under `backend/target/`. The distributed
 
 ## Limits and remaining verification
 
+Right-edge note rail follow-up: six recent active-note shortcuts with title/time hover previews, active-state markers and keyboard access. Switching first saves the current edit; failed saves leave it open for retry. Browser checks passed right-edge/scroll placement, archive exclusion, hover, keyboard, save/retry protection, fullscreen and phone visibility. Temporary test notes were removed. Evidence: `.validation/note-edge-rail.png`.
+
 Toolbar follow-up: dragging clears the sticky bottom offset, preventing a stretched pill. Users can switch horizontal/vertical layout; the browser remembers the choice. Pointer drags, orientation changes, reload persistence and viewport-edge clamping passed browser checks, including tablet/phone sizes. The horizontal palette stays on one row with sideways scrolling when needed. Actual iPad hardware remains unverified. Evidence: ignored `.validation/toolbar-horizontal.png` and `toolbar-vertical.png`.
 
 2026-11-05 follow-up: three desktop columns now have pointer/keyboard resize handles and local browser width persistence. Direct folder and note-list delete actions require confirmation; Inbox cannot be deleted and folder notes are preserved in Inbox. A synthetic-account browser run verified creation, both cancellation paths, both confirmed deletions, server state after reload, resized width persistence and minimum editor width on a smaller viewport. Frontend tests/typecheck passed. Screenshots/logs are under ignored `.validation/`.

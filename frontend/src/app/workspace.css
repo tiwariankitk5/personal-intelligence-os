@@ -24,9 +24,21 @@
   .note-editor-footer{flex-wrap:wrap}
 }
 .notes-workspace{position:relative}
+.note-edge-rail-anchor{position:sticky;top:50%;align-self:flex-end;flex:0 0 0;height:0;width:0;min-height:0;margin-right:6px;z-index:45}
+.note-edge-rail{position:absolute;right:0;top:0;transform:translateY(-50%);display:grid;gap:3px}
+.note-edge-rail button{position:relative;display:flex;align-items:center;justify-content:flex-end;width:36px;height:28px;padding:5px;border:0;border-radius:6px;background:transparent;cursor:pointer}
+.note-edge-rail button:hover,.note-edge-rail button:focus-visible{background:#edf1ee;outline:2px solid #a9c7b4;outline-offset:1px}
+.note-edge-line{width:17px;height:3px;border-radius:3px;background:#a3afa7;transition:width .15s,background .15s}
+.note-edge-rail button.active .note-edge-line{width:26px;background:#8b66d1}
+.note-edge-preview{position:absolute;right:calc(100% + 9px);top:50%;transform:translateY(-50%);width:190px;padding:12px 14px;border:1px solid #3e4741;border-radius:12px;background:#242b26;color:#f3f6f3;text-align:left;box-shadow:0 8px 25px #14201b26;pointer-events:none;visibility:hidden;opacity:0;transition:opacity .15s}
+.note-edge-preview strong{display:block;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.note-edge-preview small{display:block;margin-top:4px;font-size:10px;color:#a8b4ac}
+.note-edge-rail button:hover .note-edge-preview,.note-edge-rail button:focus-visible .note-edge-preview{visibility:visible;opacity:1}
+.note-edge-rail-anchor~.note-editor-content{padding-right:48px}
+@media(pointer:coarse){.note-edge-rail button{height:36px;width:40px}}
 .floating-rich-toolbar{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;min-height:42px}
 .floating-rich-toolbar>*{flex-shrink:0}
-.floating-rich-toolbar.toolbar-vertical{position:fixed;top:80px;right:16px;bottom:auto;flex-direction:column;width:max-content;max-width:56px;max-height:calc(100dvh - 96px);min-height:0;margin:0;padding:9px 7px;border-radius:18px;overflow-x:hidden;overflow-y:auto}
+.floating-rich-toolbar.toolbar-vertical{position:fixed;top:80px;right:56px;bottom:auto;flex-direction:column;width:max-content;max-width:56px;max-height:calc(100dvh - 96px);min-height:0;margin:0;padding:9px 7px;border-radius:18px;overflow-x:hidden;overflow-y:auto}
 .floating-rich-toolbar.toolbar-vertical .toolbar-divider{width:22px;height:1px;margin:4px 0}
 .pios-mobile-menu{display:grid;place-items:center;border:0;background:transparent;color:#75857a;width:32px;height:32px;flex-shrink:0;cursor:pointer}
 @media(min-width:761px){.pios-sidebar:not(.open){display:none}}

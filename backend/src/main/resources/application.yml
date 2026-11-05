@@ -35,6 +35,9 @@ server:
     include-stacktrace: never
 
 app:
+  rag:
+    worker-enabled: ${PIOS_RAG_WORKER_ENABLED:true}
+    worker-delay-ms: ${PIOS_RAG_WORKER_DELAY_MS:3000}
   auth-abuse:
     login-ip-limit: ${PIOS_AUTH_LOGIN_IP_LIMIT:30}
     registration-ip-limit: ${PIOS_AUTH_REGISTER_IP_LIMIT:5}

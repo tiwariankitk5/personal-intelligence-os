@@ -34,6 +34,8 @@ jobs:
       APP_SESSION_COOKIE_SECURE: 'false'
       PIOS_AUTH_COOLDOWN_SECONDS: '2'
       PIOS_AUTH_SMOKE_DISPOSABLE: 'true'
+      PIOS_ALLOW_LOCAL_MODELS: 'true'
+      PIOS_RAG_WORKER_DELAY_MS: '250'
     defaults:
       run:
         working-directory: backend
@@ -65,6 +67,8 @@ jobs:
             exit 1
           fi
           node ../scripts/smoke-test.mjs
+          node ../scripts/rag-test-provider.mjs > target/rag-fixture.log 2>&1 &
+          node ../scripts/rag-smoke-test.mjs
           node ../scripts/auth-abuse-smoke.mjs
 
   frontend:

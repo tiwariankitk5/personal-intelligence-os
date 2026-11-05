@@ -18,7 +18,7 @@ The integrated editor adds page covers/settings, searchable slash commands, code
 - Search stored source titles and text.
 - Connect cloud AI with a provider API key, or connect a compatible local model server. V1 includes OpenAI-compatible endpoints (including OpenAI, OpenRouter, Groq, DeepSeek, Mistral and compatible gateways), Anthropic Messages API, and Google Gemini API.
 - Provider keys are encrypted at rest with AES-256-GCM. They are never returned to the browser after saving.
-- Test a provider, choose a default provider, and use Ask PIOS. Relevant account-owned notes and sources are selected with keyword scoring, sent to the selected provider, and returned with source metadata citations.
+- Test a provider, choose a default provider, and use Ask PIOS. Relevant account-owned passages are retrieved with PostgreSQL full-text search and, when explicitly configured, embedding/pgvector hybrid search. Answers include numbered passage excerpts. See docs/SEMANTIC_RAG.md.
 - Create learning objectives and update progress.
 - Docker Compose for frontend, backend, PostgreSQL + pgvector and persistent uploaded files.
 
@@ -141,7 +141,7 @@ pios-v1-fullstack/
 ## Architecture and security notes
 
 - The backend is a modular monolith. It is intentionally not split into microservices.
-- PostgreSQL holds user, folder, note, source, provider, conversation and learning records. pgvector is enabled and a vector column exists for the upcoming embedding pipeline.
+- PostgreSQL holds user, folder, note, source, provider, conversation and learning records. pgvector stores configured embedding profiles; durable jobs maintain note/source chunks with owner-scoped retrieval.
 - Uploaded original files are persisted in the `pios-uploads` Docker volume. PostgreSQL is persisted in `pios-postgres-data`.
 - Passwords use BCrypt. JWTs are signed with a 256-bit-or-stronger secret. API keys use AES-256-GCM encryption with a random IV.
 - User-owned queries scope reads/writes to the authenticated user ID. The model does not get direct database access.
@@ -151,9 +151,9 @@ pios-v1-fullstack/
 
 ## Known limitations — not production-ready SaaS yet
 
-- RAG retrieval is keyword-scored over note and extracted source text. The app stores chunks and has a pgvector column, but it does not yet generate embeddings or run semantic/hybrid vector retrieval.
+- Semantic RAG is opt-in: configure a compatible embedding provider separately from chat, allow processing, and set daily call/input limits. Without ready embeddings the app uses keyword fallback. Exact cited passages, indexing status and limits are documented in docs/SEMANTIC_RAG.md.
 - Destination recommendations are local keyword heuristics. AI-assisted folder/page routing is not wired yet.
-- Only one default chat provider is used. Per-task model routing, dedicated embedding/vision models and usage/cost accounting are future work.
+- One default chat provider and a separate embedding model are supported. Embedding calls/input reservations and reported tokens are tracked; broader task/vision routing and monetary billing remain future work.
 - No PIOS-managed provider billing, subscriptions, credit ledger or payment integration.
 - No OAuth integrations for Drive, Gmail, GitHub, Slack, Calendar or other external applications.
 - No desktop menu-bar/notch quick-capture companion; the current quick capture runs inside the PIOS browser tab.

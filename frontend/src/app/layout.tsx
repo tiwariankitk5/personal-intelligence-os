@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import "./connected.css";
 import "./workspace.css";
+import "./retrieval.css";
 
 export const metadata: Metadata = {
   title: "PIOS — Personal Intelligence OS",

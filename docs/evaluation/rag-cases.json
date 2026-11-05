@@ -1,0 +1,23 @@
+{
+  "description": "Small English engineering/study retrieval regression set. Not a representative production benchmark.",
+  "documents": [
+    {"key":"quorum","title":"Replica acknowledgement","text":"A replicated database accepts a write after a majority of replicas acknowledge it. With five replicas, three acknowledgements form a quorum."},
+    {"key":"idempotency","title":"Safe repeated payments","text":"A payment service records an operation key. Repeated delivery of the same request returns the stored result instead of charging the customer twice."},
+    {"key":"outbox","title":"Durable event publication","text":"A transaction writes both the business update and an event record into the same database. A background relay publishes that record to a message broker."},
+    {"key":"retrieval","title":"Meaning-based indexing","text":"A search system represents text as dense numeric vectors. Nearest-neighbor comparison finds related passages even when they use different words."},
+    {"key":"palm","title":"Tablet writing input","text":"A tablet ignores touches from the hand resting on the screen while a stylus writes strokes. The pen remains the active drawing input."},
+    {"key":"backup","title":"Recovery drills","text":"Backups are encrypted snapshots stored outside the live database. A recovery drill restores a snapshot into an isolated environment and checks that records can be read."},
+    {"key":"lease","title":"Expiring queue claims","text":"A worker claims a queue item for a limited time. If the worker crashes, another worker can claim the item after the claim expires. A unique fencing token prevents the old worker from committing stale results."},
+    {"key":"srs","title":"Scheduled study sessions","text":"Study sessions revisit material on a schedule. Correct answers lengthen the interval before the next review; forgotten answers shorten it."}
+  ],
+  "queries": [
+    {"query":"How many servers must confirm a change when five copies exist?","expected":"quorum"},
+    {"query":"How do I stop duplicate purchases after a network retry?","expected":"idempotency"},
+    {"query":"How can I reliably notify another service after saving an order?","expected":"outbox"},
+    {"query":"Find related notes even if my question uses different wording.","expected":"retrieval"},
+    {"query":"How can someone write with a pencil without their wrist making marks?","expected":"palm"},
+    {"query":"How do we prove saved copies can recover our data after a failure?","expected":"backup"},
+    {"query":"What prevents a crashed job runner from blocking work forever?","expected":"lease"},
+    {"query":"How should a learning app decide when to show a flashcard again?","expected":"srs"}
+  ]
+}
