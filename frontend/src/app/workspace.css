@@ -24,6 +24,8 @@
   .note-editor-footer{flex-wrap:wrap}
 }
 .notes-workspace{position:relative}
+.pios-mobile-menu{display:grid;place-items:center;border:0;background:transparent;color:#75857a;width:32px;height:32px;flex-shrink:0;cursor:pointer}
+@media(min-width:761px){.pios-sidebar:not(.open){display:none}}
 @media(min-width:1000px){
   .pios-shell:has(.notes-page-content){height:100dvh;min-height:0;overflow:hidden}
   .pios-shell:has(.notes-page-content)>.pios-sidebar{height:100dvh;min-height:0;overflow-y:auto}
