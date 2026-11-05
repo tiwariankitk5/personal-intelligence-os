@@ -17,14 +17,21 @@ if (fs.existsSync(output))
 const env = { ...process.env };
 delete env.GH_DEBUG;
 delete env.DEBUG;
-function gh(args, input) { try {
-    return execFileSync('gh', args, { input, env, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+function gh(args, input) {
+    try {
+        return execFileSync('gh', args, { input, env, encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    }
+    catch {
+        throw new Error('GitHub recovery request failed. Check gh auth status and repository write access.');
+    }
 }
-catch {
-    throw new Error('GitHub recovery request failed. Check gh auth status and repository write access.');
-} }
-function api(method, route, data) { const argv = ['api', '--method', method, 'repos/' + repo + '/' + route]; if (data)
-    argv.push('--input', '-'); const text = gh(argv, data ? JSON.stringify(data) : undefined); return text ? JSON.parse(text) : null; }
+function api(method, route, data) {
+    const argv = ['api', '--method', method, 'repos/' + repo + '/' + route];
+    if (data)
+        argv.push('--input', '-');
+    const text = gh(argv, data ? JSON.stringify(data) : undefined);
+    return text ? JSON.parse(text) : null;
+}
 let branch, artifact;
 try {
     const metadata = JSON.parse(gh(['api', 'repos/' + repo]));
