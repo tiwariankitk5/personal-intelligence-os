@@ -10,6 +10,7 @@ Updated: 2026-11-05. Replace stale status at milestone boundaries; do not append
 - Baseline passed 15 Java tests, 4 frontend tests, typecheck/build, dependency audit, real database/API smoke checks and browser flows. Evidence and limits: `docs/EDITOR_VALIDATION.md`.
 
 ## Outstanding work
+- Fullscreen note content now uses the viewport width with 16–32px side padding; verified at 820/1280/1920px, fullscreen exit and no runtime errors. Frontend Docker production build passed. Evidence: ignored `.validation/fullwidth-*.png`.
 - Desktop/tablet layout adjustment passed browser checks at 1056, 1440, 820 and 390px: no horizontal overflow; long notes scroll internally at desktop widths; no browser runtime errors. Frontend tests, typecheck, local production build and frontend Docker rebuild passed. Screenshots: ignored `.validation/layout-*.png`.
 - Current setup adds repository instructions, a development skill and a quiet verification runner. Skill validation, frontend tests/typecheck and backend tests passed through the runner. Missing-tool/nonlocal-smoke guards passed; command plan inspected. Backend tests require loopback access outside the restricted sandbox. Full app revalidation is unnecessary for these tooling/docs changes alone.
 - Next: check CI on the exact published commit, then implement one bounded requirement from `docs/ACCEPTED_REQUIREMENTS.md`. Suggested next milestone: embedded YouTube study workspace with timestamp-linked notes, before transcript automation.
