@@ -32,10 +32,6 @@ jobs:
       APP_JWT_SECRET_BASE64: cGlvcy10ZXN0LXNlY3JldC1rZXktMzItYnl0ZXMhISE=
       PIOS_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       APP_SESSION_COOKIE_SECURE: 'false'
-      PIOS_AUTH_COOLDOWN_SECONDS: '2'
-      PIOS_AUTH_SMOKE_DISPOSABLE: 'true'
-      PIOS_ALLOW_LOCAL_MODELS: 'true'
-      PIOS_RAG_WORKER_DELAY_MS: '250'
     defaults:
       run:
         working-directory: backend
@@ -52,6 +48,11 @@ jobs:
         with:
           node-version: '22'
       - name: Verify migrations and account-scoped API flows
+        env:
+          PIOS_AUTH_COOLDOWN_SECONDS: '2'
+          PIOS_AUTH_SMOKE_DISPOSABLE: 'true'
+          PIOS_ALLOW_LOCAL_MODELS: 'true'
+          PIOS_RAG_WORKER_DELAY_MS: '250'
         run: |
           java -jar target/personal-intelligence-os-0.1.0-SNAPSHOT.jar > target/smoke-backend.log 2>&1 &
           ready=false

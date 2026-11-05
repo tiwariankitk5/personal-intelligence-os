@@ -19,7 +19,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties={"app.auth-abuse.login-ip-limit=3","app.auth-abuse.registration-ip-limit=2","app.auth-abuse.failed-login-limit=3"},
+@SpringBootTest(properties={"app.auth-abuse.login-ip-limit=3","app.auth-abuse.registration-ip-limit=2","app.auth-abuse.failed-login-limit=3","app.auth-abuse.cooldown-seconds=60"},
         classes={com.pios.PersonalIntelligenceApplication.class,AuthAbuseIntegrationTest.TimeConfiguration.class})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
