@@ -4,23 +4,21 @@ Updated: 2026-11-05. Replace stale status at milestone boundaries; do not append
 
 ## Current state
 - Repository: tiwariankitk5/personal-intelligence-os. Branch: `codex/complete-note-workspace`.
-- Draft PR #3: https://github.com/tiwariankitk5/personal-intelligence-os/pull/3, stacked on production-readiness PR #2. Neither is a public deployment.
-- Committed editor milestone: `24dfad6`. Notes/covers/slash commands, persisted editable diagrams, account-owned Draft sheets, export/import, browser sessions/CSRF and provider endpoint restrictions are implemented.
-- Distributed systems guide is saved in the local signed-in workspace, with an editable Client → Java API → Postgres diagram. Source copies: `docs/study-notes/`.
-- Baseline passed 15 Java tests, 4 frontend tests, typecheck/build, dependency audit, real database/API smoke checks and browser flows. Evidence and limits: `docs/EDITOR_VALIDATION.md`.
+- Draft PR #3: https://github.com/tiwariankitk5/personal-intelligence-os/pull/3, stacked on production-readiness PR #2. No public deployment or main merge.
+- Notes milestone includes covers/slash commands, persisted editable diagrams, Draft sheets, import/export, serial save/retry and browser sessions/CSRF. Evidence/limits: `docs/EDITOR_VALIDATION.md`.
+- Three desktop columns resize by drag/keyboard and remember browser widths. Folder deletion preserves notes in Inbox; note-list deletion confirms. Notes fill remaining viewport height; cards show title/delete only. Main navigation auto-hides after selecting any tab and reopens from the top-left menu.
+- Authentication safeguards now use shared PostgreSQL counters, source/account quotas and failed-login cooldowns on browser and legacy routes. Logs contain keyed references rather than raw identities or credentials. Details: `docs/AUTH_ABUSE_PROTECTION.md`.
+- Validation: 30 Java tests and frontend tests/typecheck passed. Isolated real PostgreSQL/API smoke passed cooldown recovery, both auth routes, quotas, unknown-account parity and spoofed-forwarding rejection. The disposable smoke deliberately exhausts quotas; never run it on the user's stack.
+- Formatting-toolbar drag sizing fixed by clearing bottom positioning; drag bounds stay on screen. Users choose horizontal or vertical orientation, remembered in the browser. Both layouts and edge dragging passed tablet/phone viewport checks; frontend/backend production builds and normal API smoke passed after local application.
 
-## Outstanding work
-- Main navigation now auto-hides after any sidebar tab selection on desktop and mobile. Top-left menu toggles it; Escape closes it; hidden navigation is inert. Browser checks passed for all navigation tabs, reopening, Escape, reclaimed note width and mobile scrim dismissal; frontend production build passed. Evidence: `.validation/sidebar-autohide.png`.
-- Notes desktop view now fills remaining viewport height with 16px side margins, a compact page header and no outer page scrolling; note cards show only title/delete. Verified at 1280×540, 1440×900 and 1056×700; production frontend build passed. Evidence: `.validation/workspace-*.png`.
-- Added draggable/keyboard-accessible folder and note column dividers, browser-persisted widths, double-click reset and minimum editor space. Added confirmed folder deletion (notes move to Inbox) and direct note-list delete buttons; existing New note and Create folder actions remain available. Frontend tests/typecheck and synthetic-account browser checks passed: resizing/reload, responsive bounds, UI creation, cancellation, deletion and server-persisted note preservation. Evidence: `.validation/resize-actions.png` and local check-actions script.
-- Fullscreen note content now uses the viewport width with 16–32px side padding; verified at 820/1280/1920px, fullscreen exit and no runtime errors. Frontend Docker production build passed. Evidence: ignored `.validation/fullwidth-*.png`.
-- Corrected desktop layout to three side-by-side columns (folders, note list, editor), replacing the cramped stacked sidebar. Browser checks at 1056/1280/1440px confirm aligned panes, no pane/page horizontal overflow and internal editor scrolling; 820/390px responsive checks also pass without runtime errors. Frontend Docker production build passed. Screenshots: ignored `.validation/columns-*.png`.
-- Current setup adds repository instructions, a development skill and a quiet verification runner. Skill validation, frontend tests/typecheck and backend tests passed through the runner. Missing-tool/nonlocal-smoke guards passed; command plan inspected. Backend tests require loopback access outside the restricted sandbox. Full app revalidation is unnecessary for these tooling/docs changes alone.
-- Next: check CI on the exact published commit, then implement one bounded requirement from `docs/ACCEPTED_REQUIREMENTS.md`. Suggested next milestone: embedded YouTube study workspace with timestamp-linked notes, before transcript automation.
-- Physical iPad/Apple Pencil and final PDF rendering remain unverified. Semantic RAG, video/YouTube ingestion, OAuth/MCP connectors, billing, durable shared sessions, Kubernetes and public-production hardening remain open.
+## Next work / limits
+- Check CI on the exact latest published commit. Next product milestone: embeddings + pgvector/hybrid retrieval with account isolation and citations.
+- Public release still needs trusted ingress configuration, AI spend/concurrency controls, recovery/verification, backup restore and upload hardening. Auth limits do not complete production readiness.
+- Physical Apple Pencil/iPad and final PDF rendering remain unverified. YouTube/video ingestion, OAuth/MCP connectors, billing, durable shared sessions and Kubernetes remain open.
+- Requirements: `docs/ACCEPTED_REQUIREMENTS.md`; release blockers: `PRODUCTION_READINESS.md`. Distributed systems source guide: `docs/study-notes/`; current account contents may have been changed by the user.
 
-## Working environment
-- Open this repository as the Codex project root. Skill: `.agents/skills/pios-development/SKILL.md`.
-- Local isolated compose stack normally serves http://localhost:3100 and backend http://localhost:8180. Verify mapped ports with Compose; other user-owned PIOS containers exist.
-- Browser sessions currently live in memory; backend restart requires sign-in again. Do not store credentials here.
-- Product scope: `docs/ACCEPTED_REQUIREMENTS.md`; production gaps: `PRODUCTION_READINESS.md`; older handoffs are historical, not current status.
+## Environment
+- Local user app: http://localhost:3100; API: http://localhost:8180. Verify Compose mappings. Preserve unrelated containers/data.
+- Sessions are in memory; backend restart requires sign-in. No credentials belong in this file.
+- Use AGENTS.md and `.agents/skills/pios-development/SKILL.md`; quiet verifier: `scripts/verify-pios.ps1`.
+- Ignored `.validation/` holds logs, browser checks and screenshots. The temporary `pios-auth-validation` project and its disposable volumes were removed after quota tests; the user stack remains running.

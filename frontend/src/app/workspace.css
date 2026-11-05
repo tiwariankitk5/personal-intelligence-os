@@ -24,6 +24,10 @@
   .note-editor-footer{flex-wrap:wrap}
 }
 .notes-workspace{position:relative}
+.floating-rich-toolbar{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;min-height:42px}
+.floating-rich-toolbar>*{flex-shrink:0}
+.floating-rich-toolbar.toolbar-vertical{position:fixed;top:80px;right:16px;bottom:auto;flex-direction:column;width:max-content;max-width:56px;max-height:calc(100dvh - 96px);min-height:0;margin:0;padding:9px 7px;border-radius:18px;overflow-x:hidden;overflow-y:auto}
+.floating-rich-toolbar.toolbar-vertical .toolbar-divider{width:22px;height:1px;margin:4px 0}
 .pios-mobile-menu{display:grid;place-items:center;border:0;background:transparent;color:#75857a;width:32px;height:32px;flex-shrink:0;cursor:pointer}
 @media(min-width:761px){.pios-sidebar:not(.open){display:none}}
 @media(min-width:1000px){

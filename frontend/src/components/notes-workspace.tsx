@@ -211,8 +211,18 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const [askCitations, setAskCitations] = useState<{id:string;title:string}[]>([]);
   const [askBusy, setAskBusy] = useState(false);
   const [askConversationId, setAskConversationId] = useState<string | undefined>();
-  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
+  const [toolbarPosition, setToolbarPosition] = useState<{ x: number; y: number } | null>(null);
   const [toolbarDragging, setToolbarDragging] = useState(false);
+  const [toolbarOrientation, setToolbarOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    try { const saved = localStorage.getItem("pios-format-toolbar-orientation"); if (saved === "vertical" || saved === "horizontal") setToolbarOrientation(saved); } catch { /* Browser preference storage is optional. */ }
+  }, []);
+  const toggleToolbarOrientation = () => {
+    const next = toolbarOrientation === "horizontal" ? "vertical" : "horizontal";
+    setToolbarOrientation(next);
+    try { localStorage.setItem("pios-format-toolbar-orientation", next); } catch { /* Keep the current layout without storage. */ }
+  };
   const [inkData, setInkData] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -235,6 +245,22 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const currentDraftSignature = useRef("");
   currentDraftSignature.current = JSON.stringify([draftTitle, draftHtml, draftColor, inkData, coverUrl, pageTheme, pageIcon, coverPosition]);
   const selected = notes.find((note) => note.id === selectedId) ?? null;
+  useEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+    const keepVisible = () => {
+      const rect = toolbar.getBoundingClientRect();
+      setToolbarPosition((position) => {
+        if (!position) return position;
+        const x = Math.max(8, Math.min(window.innerWidth - rect.width - 8, position.x));
+        const y = Math.max(8, Math.min(window.innerHeight - rect.height - 8, position.y));
+        return x === position.x && y === position.y ? position : { x, y };
+      });
+    };
+    const observer = new ResizeObserver(keepVisible); observer.observe(toolbar);
+    window.addEventListener("resize", keepVisible);
+    return () => { observer.disconnect(); window.removeEventListener("resize", keepVisible); };
+  }, [selectedId]);
   const diagramStore = readDiagramStore(inkData);
   const savedDiagramCount = diagramStore.diagrams.length + (diagramStore.legacyScene ? 1 : 0);
   const inboxFolderId = folders.find((folder) => folder.name.trim().toLowerCase() === "inbox")?.id ?? "inbox";
@@ -500,12 +526,16 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   };
   const startToolbarDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!(event.target as HTMLElement).closest("[data-toolbar-handle]")) return;
-    const element = event.currentTarget;
-    const rect = element.getBoundingClientRect();
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
     const origin = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
-    const move = (moveEvent: PointerEvent) => setToolbarPosition({ x: origin.left + moveEvent.clientX - origin.x, y: origin.top + moveEvent.clientY - origin.y });
-    const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); setToolbarDragging(false); };
-    setToolbarDragging(true); window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop);
+    const move = (moveEvent: PointerEvent) => setToolbarPosition({
+      x: Math.max(8, Math.min(window.innerWidth - rect.width - 8, origin.left + moveEvent.clientX - origin.x)),
+      y: Math.max(8, Math.min(window.innerHeight - rect.height - 8, origin.top + moveEvent.clientY - origin.y)),
+    });
+    const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); window.removeEventListener("pointercancel", stop); setToolbarDragging(false); };
+    setToolbarPosition({ x: rect.left, y: rect.top });
+    setToolbarDragging(true); window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop); window.addEventListener("pointercancel", stop);
   };
 
   const handleCoverFile = (file?: File) => {
@@ -666,8 +696,9 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
           <div className="note-cover" style={coverUrl ? { backgroundImage: `url(${coverUrl})`, backgroundPosition: `center ${coverPosition}%` } : undefined}><button type="button" onClick={() => coverInputRef.current?.click()}>{coverUrl ? "Change cover" : "Add cover"}</button>{coverUrl && <button type="button" onClick={() => setCoverUrl("")}>Remove</button>}<input ref={coverInputRef} hidden type="file" accept="image/*" onChange={(event) => handleCoverFile(event.target.files?.[0])}/></div>
           <div className="page-preferences"><input aria-label="Page icon" placeholder="Page icon" value={pageIcon} maxLength={12} onChange={(event) => setPageIcon(event.target.value)}/><select aria-label="Page appearance" value={pageTheme} onChange={(event) => setPageTheme(event.target.value)}>{["white", "black", "warm", "ruled", "grid", "dots"].map((theme) => <option key={theme} value={theme}>{theme}</option>)}</select>{coverUrl && <label>Cover position<input aria-label="Cover position" type="range" min="0" max="100" value={coverPosition} onChange={(event) => setCoverPosition(Number(event.target.value))}/></label>}<button onClick={() => setDraftOpen(true)}>✎ Draft</button><button onClick={() => importInputRef.current?.click()}>Import HTML / text</button><input hidden ref={importInputRef} type="file" accept=".html,.htm,.txt" onChange={(event) => { void importContent(event.target.files?.[0]); event.target.value = ""; }}/><button onClick={() => setAskOpen(!askOpen)}>✦ Ask PIOS</button></div><input className="note-editor-title" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Untitled note" aria-label="Note title"/>
           <div className="note-editor-meta"><span><Icon name="folder" size={13}/>{folders.find((folder) => folder.id === selected.folderId)?.name ?? "Inbox"}</span><span><Icon name="clock" size={13}/>{selected.updatedAt}</span></div>
-          <div className="rich-toolbar floating-rich-toolbar" role="toolbar" aria-label="Text formatting" onPointerDown={startToolbarDrag} style={toolbarPosition.x || toolbarPosition.y ? { position: "fixed", left: toolbarPosition.x, top: toolbarPosition.y, zIndex: 50, cursor: toolbarDragging ? "grabbing" : undefined } : undefined}>
+          <div ref={toolbarRef} className={`rich-toolbar floating-rich-toolbar toolbar-${toolbarOrientation}`} role="toolbar" aria-label="Text formatting" aria-orientation={toolbarOrientation} onPointerDown={startToolbarDrag} style={toolbarPosition ? { position: "fixed", left: toolbarPosition.x, top: toolbarPosition.y, bottom: "auto", right: "auto", margin: 0, height: "auto", maxWidth: "calc(100vw - 16px)", zIndex: 50, cursor: toolbarDragging ? "grabbing" : undefined } : undefined}>
              <span data-toolbar-handle title="Drag toolbar" style={{ cursor: "grab", padding: "0 6px", touchAction: "none" }}>⠿</span>
+            <button type="button" title={toolbarOrientation === "horizontal" ? "Use vertical toolbar" : "Use horizontal toolbar"} aria-label={toolbarOrientation === "horizontal" ? "Use vertical toolbar" : "Use horizontal toolbar"} onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={toggleToolbarOrientation}>{toolbarOrientation === "horizontal" ? "↕" : "↔"}</button>
             <button type="button" title="Bold (Ctrl+B)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("bold")}><b>B</b></button>
             <button type="button" title="Italic (Ctrl+I)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("italic")}><i>I</i></button>
             <button type="button" title="Underline (Ctrl+U)" onMouseDown={(event: MouseEvent) => event.preventDefault()} onClick={() => format("underline")}><u>U</u></button>

@@ -35,6 +35,8 @@ Screenshots are local ignored artifacts under `backend/target/`. The distributed
 
 ## Limits and remaining verification
 
+Toolbar follow-up: dragging clears the sticky bottom offset, preventing a stretched pill. Users can switch horizontal/vertical layout; the browser remembers the choice. Pointer drags, orientation changes, reload persistence and viewport-edge clamping passed browser checks, including tablet/phone sizes. The horizontal palette stays on one row with sideways scrolling when needed. Actual iPad hardware remains unverified. Evidence: ignored `.validation/toolbar-horizontal.png` and `toolbar-vertical.png`.
+
 2026-11-05 follow-up: three desktop columns now have pointer/keyboard resize handles and local browser width persistence. Direct folder and note-list delete actions require confirmation; Inbox cannot be deleted and folder notes are preserved in Inbox. A synthetic-account browser run verified creation, both cancellation paths, both confirmed deletions, server state after reload, resized width persistence and minimum editor width on a smaller viewport. Frontend tests/typecheck passed. Screenshots/logs are under ignored `.validation/`.
 
 - Physical iPad/Apple Pencil, pressure/latency/palm rejection, multi-monitor desktop behaviour and offline operation have not been verified. Desktop companion and global shortcuts are not implemented.
