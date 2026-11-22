@@ -24,6 +24,17 @@
   .note-editor-footer{flex-wrap:wrap}
 }
 .notes-workspace{position:relative}
+.notes-folder-toggle{display:flex;align-items:center;justify-content:center;gap:8px;min-height:36px;margin-bottom:10px;border:1px solid #e0e9e2;border-radius:7px;background:#fff;color:#397b5c;cursor:pointer;font-size:10px;flex-shrink:0}
+.notes-workspace:not(.folders-collapsed) .notes-folder-toggle svg{transform:rotate(180deg)}
+.notes-folder-toggle:focus-visible{outline:2px solid #397b5c;outline-offset:2px}
+.folders-collapsed .notes-folder-pane{padding:10px 7px;gap:6px}
+.folders-collapsed .notes-pane-heading,.folders-collapsed .notes-folder-subhead{padding:0;justify-content:center}
+.folders-collapsed .notes-pane-heading>span,.folders-collapsed .notes-folder-subhead>span,.folders-collapsed .notes-folder-row>span:nth-child(2),.folders-collapsed .notes-folder-row>b,.folders-collapsed .notes-folder-item>.notes-delete-button,.folders-collapsed .notes-folder-bottom{display:none}
+.folders-collapsed .notes-folder-row,.folders-collapsed .notes-folder-item .notes-folder-row{justify-content:center;min-height:38px;padding:0;gap:0;width:100%;flex-shrink:0}
+.folders-collapsed .notes-folder-item{flex-shrink:0}
+.folders-collapsed .folder-color-dot{width:14px;height:14px;flex-basis:14px}
+@media(min-width:721px) and (max-width:999px){.folders-collapsed{grid-template-columns:56px minmax(245px,320px) minmax(0,1fr)}}
+@media(max-width:720px){.notes-folder-toggle{min-width:38px;margin-bottom:0}.folders-collapsed .notes-folder-pane .notes-pane-heading{width:auto}.folders-collapsed .notes-folder-row,.folders-collapsed .notes-folder-item{width:38px}.folders-collapsed .notes-folder-subhead{display:flex}}
 .note-edge-rail-anchor{position:sticky;top:50%;align-self:flex-end;flex:0 0 0;height:0;width:0;min-height:0;margin-right:6px;z-index:45}
 .note-edge-rail{position:absolute;right:0;top:0;transform:translateY(-50%);display:grid;gap:3px}
 .note-edge-rail button{position:relative;display:flex;align-items:center;justify-content:flex-end;width:36px;height:28px;padding:5px;border:0;border-radius:6px;background:transparent;cursor:pointer}
@@ -40,8 +51,31 @@
 .floating-rich-toolbar>*{flex-shrink:0}
 .floating-rich-toolbar.toolbar-vertical{position:fixed;top:80px;right:56px;bottom:auto;flex-direction:column;width:max-content;max-width:56px;max-height:calc(100dvh - 96px);min-height:0;margin:0;padding:9px 7px;border-radius:18px;overflow-x:hidden;overflow-y:auto}
 .floating-rich-toolbar.toolbar-vertical .toolbar-divider{width:22px;height:1px;margin:4px 0}
+.pios-topbar{position:sticky;top:0;z-index:100;background:#fbfcfb}
+.ask-pios-fab{position:fixed;right:24px;bottom:calc(16px + env(safe-area-inset-bottom,0px));float:none;z-index:120;cursor:pointer}
+.ask-pios-panel{position:fixed;right:24px;bottom:calc(66px + env(safe-area-inset-bottom,0px));float:none;clear:none;width:min(320px,calc(100vw - 48px));max-height:calc(100dvh - 100px);overflow-y:auto;z-index:120}
 .pios-mobile-menu{display:grid;place-items:center;border:0;background:transparent;color:#75857a;width:32px;height:32px;flex-shrink:0;cursor:pointer}
-@media(min-width:761px){.pios-sidebar:not(.open){display:none}}
+.pios-sidebar-toggle{display:grid;place-items:center;align-self:flex-end;width:36px;height:36px;flex-shrink:0;margin-bottom:12px;border:1px solid #e0e9e2;border-radius:7px;background:#fff;color:#397b5c;cursor:pointer}
+.pios-sidebar.open .pios-sidebar-toggle svg{transform:rotate(180deg)}
+.pios-sidebar-toggle:focus-visible{outline:2px solid #397b5c;outline-offset:2px}
+.pios-account-menu{position:fixed;z-index:900;width:240px;max-width:calc(100vw - 16px);padding:8px;border:1px solid #e0e9e2;border-radius:12px;background:#fff;color:#34483b;box-shadow:0 12px 36px #163b2526}
+.pios-account-summary{display:grid;gap:5px;padding:10px 9px 12px;border-bottom:1px solid #edf1ed;margin-bottom:5px;overflow-wrap:anywhere}
+.pios-account-summary strong{font-size:12px}.pios-account-summary small{font-size:10px;color:#7b8980}
+.pios-account-menu>button{display:flex;align-items:center;gap:9px;width:100%;min-height:42px;padding:10px;border:0;border-radius:7px;background:transparent;color:inherit;text-align:left;font-size:12px;cursor:pointer}
+.pios-account-menu>button:hover,.pios-account-menu>button:focus-visible{background:#edf5ef;outline:2px solid #b6d1bf;outline-offset:-2px}
+.pios-account-menu>button.pios-account-logout{color:#b44848}
+@media(min-width:761px){
+  .pios-sidebar{position:sticky;top:0;height:100dvh;min-height:0;overflow-y:auto;flex-shrink:0}
+  .pios-sidebar:not(.open){display:flex;width:64px;flex-basis:64px;padding:14px 8px}
+  .pios-sidebar:not(.open) .pios-sidebar-toggle{align-self:center}
+  .pios-sidebar:not(.open)>.pios-brand{padding:0 0 20px;justify-content:center}
+  .pios-sidebar:not(.open) .pios-brand>span:nth-child(2),.pios-sidebar:not(.open) .pios-workspace-pill>span:nth-child(2),.pios-sidebar:not(.open) .pios-workspace-pill>svg,.pios-sidebar:not(.open) .pios-nav-label,.pios-sidebar:not(.open) .pios-nav-text,.pios-sidebar:not(.open) .pios-nav-spark,.pios-sidebar:not(.open) .pios-storage-card,.pios-sidebar:not(.open) .pios-user-row>span:nth-child(2),.pios-sidebar:not(.open) .pios-user-row>svg{display:none}
+  .pios-sidebar:not(.open) .pios-workspace-pill{justify-content:center;padding:8px 0;margin-bottom:18px}
+  .pios-sidebar:not(.open) .pios-nav button{justify-content:center;min-height:42px;padding:10px;gap:0}
+  .pios-sidebar:not(.open) .pios-nav+.pios-nav-label+.pios-nav{margin-top:22px}
+  .pios-sidebar:not(.open) .pios-user-row{justify-content:center;padding:12px 0}
+}
+@media(max-width:760px){.pios-sidebar:not(.open){visibility:hidden}.pios-sidebar.open{visibility:visible}}
 @media(min-width:1000px){
   .pios-shell:has(.notes-page-content){height:100dvh;min-height:0;overflow:hidden}
   .pios-shell:has(.notes-page-content)>.pios-sidebar{height:100dvh;min-height:0;overflow-y:auto}

@@ -174,6 +174,15 @@ export function QuickCaptureModal({ folders, notes, onClose, onSave }: QuickCapt
 }
 
 export default function NotesWorkspace({ notes, folders, onNotesChange, onFoldersChange, onDeleteFolder, onDeleteNote, onQuickCapture, onToast }: NotesWorkspaceProps) {
+  const [foldersCollapsed, setFoldersCollapsed] = useState(true);
+  useEffect(() => {
+    try { setFoldersCollapsed(localStorage.getItem("pios-folders-collapsed-v1") !== "false"); } catch { /* Keep the compact default without storage. */ }
+  }, []);
+  const toggleFolders = () => {
+    const next = !foldersCollapsed;
+    setFoldersCollapsed(next);
+    try { localStorage.setItem("pios-folders-collapsed-v1", String(next)); } catch { /* The toggle still works without storage. */ }
+  };
   const [selectedFolderId, setSelectedFolderId] = useState("all");
   const [filter, setFilter] = useState<"active" | "pinned" | "archived">("active");
   const [search, setSearch] = useState("");
@@ -664,14 +673,15 @@ export default function NotesWorkspace({ notes, folders, onNotesChange, onFolder
   const folderTitle = selectedFolderId === "all" ? "All notes" : folders.find((folder) => folder.id === selectedFolderId)?.name ?? "Notes";
   const currentFolderId = selected?.folderId || inboxFolderId;
 
-  return <NotesWorkspaceLayout>
+  return <NotesWorkspaceLayout foldersCollapsed={foldersCollapsed}>
     <aside className="notes-folder-pane">
+      <button type="button" className="notes-folder-toggle" onClick={toggleFolders} aria-expanded={!foldersCollapsed} aria-label={foldersCollapsed ? "Expand folders" : "Collapse folders"} title={foldersCollapsed ? "Expand folders" : "Collapse folders"}><Icon name="chevron-right" size={18}/>{!foldersCollapsed && <span>Collapse folders</span>}</button>
       <div className="notes-pane-heading"><span>YOUR NOTES</span><button className="icon-button" onClick={onQuickCapture} aria-label="Create a note"><Icon name="plus" size={16}/></button></div>
-      <button className={`notes-folder-row ${selectedFolderId === "all" ? "active" : ""}`} onClick={() => setSelectedFolderId("all")}><Icon name="layers" size={16}/><span>All notes</span><b>{notes.filter((note) => !note.archived).length}</b></button>
-      <button className={`notes-folder-row ${selectedFolderId === inboxFolderId ? "active" : ""}`} onClick={() => setSelectedFolderId(inboxFolderId)}><Icon name="inbox" size={16}/><span>Inbox</span><b>{notes.filter((note) => note.folderId === inboxFolderId && !note.archived).length}</b></button>
+      <button title="All notes" aria-label="All notes" className={`notes-folder-row ${selectedFolderId === "all" ? "active" : ""}`} onClick={() => setSelectedFolderId("all")}><Icon name="layers" size={16}/><span>All notes</span><b>{notes.filter((note) => !note.archived).length}</b></button>
+      <button title="Inbox" aria-label="Inbox" className={`notes-folder-row ${selectedFolderId === inboxFolderId ? "active" : ""}`} onClick={() => setSelectedFolderId(inboxFolderId)}><Icon name="inbox" size={16}/><span>Inbox</span><b>{notes.filter((note) => note.folderId === inboxFolderId && !note.archived).length}</b></button>
       <div className="notes-folder-subhead"><span>FOLDERS</span><button onClick={() => setFolderDialog(true)} aria-label="Create folder"><Icon name="plus" size={14}/></button></div>
       {folders.filter((folder) => folder.id !== inboxFolderId).map((folder) => <div className="notes-folder-item" key={folder.id}>
-        <button className={`notes-folder-row ${selectedFolderId === folder.id ? "active" : ""}`} onClick={() => setSelectedFolderId(folder.id)}><span className="folder-color-dot" style={{ background: folder.color }}/><span>{folder.name}</span><b>{notes.filter((note) => note.folderId === folder.id && !note.archived).length}</b></button>
+        <button title={folder.name} aria-label={folder.name} className={`notes-folder-row ${selectedFolderId === folder.id ? "active" : ""}`} onClick={() => setSelectedFolderId(folder.id)}><span className="folder-color-dot" style={{ background: folder.color }}/><span>{folder.name}</span><b>{notes.filter((note) => note.folderId === folder.id && !note.archived).length}</b></button>
         <button type="button" className="notes-delete-button" title={`Delete folder ${folder.name}`} aria-label={`Delete folder ${folder.name}`} disabled={deletingFolder} onClick={() => void removeFolder(folder)}><Icon name="trash" size={12}/></button>
       </div>)}
       <div className="notes-folder-bottom"><div><Icon name="shield-check" size={15}/><span>Synced to your PIOS account</span></div><small>Stored in your PIOS database</small></div>

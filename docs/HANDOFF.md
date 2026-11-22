@@ -1,8 +1,12 @@
 # PIOS handoff
 
-Updated: 2026-11-05. Replace stale status at milestone boundaries; do not append chat history.
+Updated: 2026-11-23. Replace stale status at milestone boundaries; do not append chat history.
 
 ## Current state
+- Latest UI milestone: sticky workspace top bar; collapsible note-folder rail; main navigation collapses to icons after selecting a section. Profile menu contains Settings and Sign out; standalone Settings entry removed.
+- Peek final accepted behavior: restored sliding title tabs plus color-matched previews anchored to the hovered tab. Dark plus, immediate grip drag, saved four-edge docking and reduced-motion support remain. Hover/focus on plus or grip dismisses the prior note preview; leaving Peek closes the browse panel and retracts pointer-opened tabs. Today’s large-paper-card/pill animation experiments were reverted at the user’s request.
+- Root HTML now uses force-dynamic/no-store so new deployments load fresh asset references. Local frontend updated at localhost:3100; latest fresh URL ?update=peek-control-dismiss-20261123.
+- Validation: frontend tests/typecheck and production Docker build passed. Isolated browser fixtures verified rails, account menu/logout, hover colors/alignment, mouse/touch docking and the recording-specific note-to-control dismissal. Evidence/helpers remain ignored under .validation/. Physical iPad and native animation were not verified by these checks.
 - Repository: tiwariankitk5/personal-intelligence-os. Branch: `codex/complete-note-workspace`.
 - Draft PR #3: https://github.com/tiwariankitk5/personal-intelligence-os/pull/3, stacked on production-readiness PR #2. No main merge or public deployment.
 - Notes/editor/Draft milestone and responsive/resizable columns are implemented. Main navigation auto-hides after tab selection. Formatting palette is draggable with saved horizontal/vertical preference. Evidence/limits: `docs/EDITOR_VALIDATION.md`.
