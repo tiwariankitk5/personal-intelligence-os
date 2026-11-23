@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+psycopg[binary,pool]
+bcrypt
+cryptography
+PyJWT
+httpx
+nh3
+beautifulsoup4
+pypdf
+python-multipart
+email-validator

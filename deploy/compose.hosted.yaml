@@ -1,0 +1,84 @@
+# Run separately from the development project. CloudPanel owns public HTTPS.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pios
+      POSTGRES_USER: pios
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [database:/var/lib/postgresql/data]
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U pios -d pios"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    mem_limit: 1g
+    logging: &logging
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  backend:
+    image: ${PIOS_BACKEND_IMAGE:?Set an explicit backend release image}
+    build: {context: .., dockerfile: backend-python/Dockerfile}
+    restart: unless-stopped
+    environment:
+      PIOS_ENV: hosted
+      DB_URL: postgresql://db:5432/pios
+      DB_USERNAME: pios
+      PIOS_PUBLIC_ORIGIN: ${PIOS_PUBLIC_ORIGIN:?Set the public HTTPS origin}
+      PIOS_STORAGE_PATH: /app/data/uploads
+      PIOS_RAG_WORKER_ENABLED: ${PIOS_RAG_WORKER_ENABLED:-true}
+    secrets:
+      - {source: db_password, target: spring.datasource.password}
+      - {source: jwt_secret, target: app.jwt.secret-base64}
+      - {source: encryption_key, target: app.encryption.key-base64}
+    volumes: [uploads:/app/data/uploads]
+    ports: ["127.0.0.1:${PIOS_API_PORT:-8180}:8080"]
+    networks: [application, database]
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, "4", http://127.0.0.1:8080/actuator/health/readiness]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+    read_only: true
+    tmpfs: [/tmp:mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1536m
+    logging: *logging
+  frontend:
+    image: ${PIOS_FRONTEND_IMAGE:?Set an explicit frontend release image}
+    build:
+      context: ../frontend
+      args: {NEXT_PUBLIC_API_BASE_URL: /api/v1}
+    restart: unless-stopped
+    ports: ["127.0.0.1:${PIOS_WEB_PORT:-3100}:3000"]
+    networks: [application]
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    read_only: true
+    tmpfs: ["/tmp:mode=1777", "/app/.next/cache:uid=1000,gid=1000,mode=0700"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    logging: *logging
+networks:
+  application:
+  database: {internal: true}
+volumes:
+  database:
+  uploads:
+secrets:
+  db_password: {file: "${PIOS_SECRETS_DIR:?Set the secrets directory}/db_password"}
+  jwt_secret: {file: "${PIOS_SECRETS_DIR}/jwt_secret"}
+  encryption_key: {file: "${PIOS_SECRETS_DIR}/encryption_key"}

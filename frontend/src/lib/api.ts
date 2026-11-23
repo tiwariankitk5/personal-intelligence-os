@@ -2,12 +2,12 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080
 const TOKEN_KEY = "pios-access-token-v1";
 
 export type ApiUser = { id: string; email: string; displayName: string; createdAt: string };
-export type AuthResult = { accessToken: string; tokenType: string; expiresInSeconds: number; user: { id: string; email: string; displayName: string } };
+type SessionUser = { id: string; email: string; displayName: string };
 export type ApiFolder = { id: string; name: string; color: string };
 export type ApiNote = {
   id: string; title: string; bodyHtml: string; plainText: string; folderId: string | null;
   color: "sage" | "butter" | "lavender" | "sky" | "rose" | "slate";
-  pinned: boolean; archived: boolean; order: number; updatedAt: string;
+  pinned: boolean; archived: boolean; order: number; updatedAt: string; inkData?: string; coverUrl?: string; editorSettings?: string;
 };
 export type ApiSource = {
   id: string; title: string; kind: string; collection: string; originalFileName?: string;
@@ -21,40 +21,51 @@ export type ApiObjective = {
   id: string; title: string; description: string; category: string; targetDate?: string;
   progress: number; createdAt: string; updatedAt: string;
 };
-export type ApiCitation = { id: string; title: string; type: string };
+export type ApiCitation = { id: string; title: string; type: string; number: number; chunkId: string; chunkIndex: number; excerpt: string };
 export type ApiChatResponse = {
   conversationId: string; answer: string; citations: ApiCitation[]; providerId: string;
-  providerName: string; createdAt: string;
+  providerName: string; createdAt: string; retrievalMode: string; retrievalWarning?: string;
 };
 
 type RequestOptions = RequestInit & { skipAuth?: boolean };
 
-export function getToken() {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-export function saveToken(token: string) {
-  window.localStorage.setItem(TOKEN_KEY, token);
-}
+let csrfRequest: Promise<{ headerName: string; token: string }> | undefined;
+
+// Remove credentials saved by earlier versions; browser authentication now uses an HttpOnly cookie.
 export function clearToken() {
-  window.localStorage.removeItem(TOKEN_KEY);
+  if (typeof window !== "undefined") window.localStorage.removeItem(TOKEN_KEY);
+  csrfRequest = undefined;
+}
+
+function getCsrfToken() {
+  csrfRequest ??= fetch(`${API_BASE}/auth/csrf`, { credentials: "include", cache: "no-store" })
+    .then(async (response) => {
+      if (!response.ok) throw new Error("Could not prepare a secure request. Please try again.");
+      return await response.json() as { headerName: string; token: string };
+    }).catch((error) => { csrfRequest = undefined; throw error; });
+  return csrfRequest;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
-  if (!options.skipAuth) {
-    const token = getToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (!["GET", "HEAD", "OPTIONS"].includes((options.method || "GET").toUpperCase())) {
+    const csrf = await getCsrfToken();
+    headers.set(csrf.headerName, csrf.token);
   }
   if (!(options.body instanceof FormData) && options.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers, cache: "no-store" });
+  const { skipAuth, ...requestOptions } = options;
+  const response = await fetch(`${API_BASE}${path}`, { ...requestOptions, headers, credentials: "include", cache: "no-store" });
   const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
   if (!response.ok) {
     const message = payload?.message || payload?.detail || payload?.error || `Request failed (${response.status}).`;
-    if (response.status === 401 && !options.skipAuth) clearToken();
+    if (response.status === 403) csrfRequest = undefined;
+    if (response.status === 401 && !skipAuth) {
+      clearToken();
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("pios-session-expired"));
+    }
     throw new Error(message);
   }
   if (response.status === 204) return undefined as T;
@@ -62,22 +73,31 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 }
 
 export async function signIn(email: string, password: string) {
-  const result = await apiRequest<AuthResult>("/auth/login", {
+  const result = await apiRequest<SessionUser>("/auth/session/login", {
     method: "POST", skipAuth: true, body: JSON.stringify({ email, password }),
   });
-  saveToken(result.accessToken);
-  return result.user;
+  clearToken();
+  return result;
 }
 
 export async function signUp(displayName: string, email: string, password: string) {
-  const result = await apiRequest<AuthResult>("/auth/register", {
+  const result = await apiRequest<SessionUser>("/auth/session/register", {
     method: "POST", skipAuth: true, body: JSON.stringify({ displayName, email, password }),
   });
-  saveToken(result.accessToken);
-  return result.user;
+  clearToken();
+  return result;
 }
 
-export const getMe = () => apiRequest<ApiUser>("/users/me");
+export async function signOut() {
+  await apiRequest<void>("/auth/logout", { method: "POST" });
+  clearToken();
+}
+
+export const getMe = (checkingSession = false) => apiRequest<ApiUser>("/users/me", { skipAuth: checkingSession });
+export type DraftSheet = { id: string; title: string; sceneData: string; updatedAt: string };
+export const getDraftSheets = () => apiRequest<DraftSheet[]>("/drafts");
+export const saveDraftSheet = (sheet: Pick<DraftSheet, "id" | "title" | "sceneData">) =>
+  apiRequest<DraftSheet>(`/drafts/${sheet.id}`, { method: "PUT", body: JSON.stringify(sheet) });
 export const getFolders = () => apiRequest<ApiFolder[]>("/folders");
 export const createFolder = (name: string, color = "#7e9b8b", id?: string) => apiRequest<ApiFolder>("/folders", { method: "POST", body: JSON.stringify({ id, name, color }) });
 export const deleteFolder = (id: string) => apiRequest<void>(`/folders/${id}`, { method: "DELETE" });
@@ -110,3 +130,39 @@ export async function uploadSource(file: File, collection = "Inbox") {
 }
 export const createTextSource = (title: string, content: string, collection = "Inbox") =>
   apiRequest<ApiSource>("/sources/text", { method: "POST", body: JSON.stringify({ title, content, collection }) });
+
+export type RetrievalStatus = {
+  enabled: boolean; configured: boolean; providerId: string | null; model: string; dimensions: number; requestDimensions: boolean;
+  dailyCallLimit: number; dailyInputLimit: number; documents: number; chunks: number; embeddedChunks: number; truncatedDocuments: number;
+  states: { state: string; count: number }[]; lastError: string | null;
+  usage: { calls: number; reserved_input: number; reported_tokens: number; failed_calls: number };
+};
+export const getRetrievalStatus = () => apiRequest<RetrievalStatus>("/ai/retrieval/settings");
+export const configureRetrieval = (settings: { enabled: boolean; providerId: string | null; model: string; dimensions: number; requestDimensions: boolean; dailyCallLimit: number; dailyInputLimit: number; consent: boolean }) =>
+  apiRequest<RetrievalStatus>("/ai/retrieval/settings", { method: "PUT", body: JSON.stringify(settings) });
+export const retryRetrieval = () => apiRequest<RetrievalStatus>("/ai/retrieval/retry", { method: "POST" });
+export const rebuildRetrieval = () => apiRequest<RetrievalStatus>("/ai/retrieval/rebuild", { method: "POST" });
+export type RetrievedPassage = { chunkId: string; id: string; title: string; type: string; chunkIndex: number; excerpt: string };
+export const searchRetrieval = (query: string) => apiRequest<{ mode: string; warning: string | null; passages: RetrievedPassage[] }>("/ai/retrieval/search", { method: "POST", body: JSON.stringify({ query }) });
+
+export type LearningQuestion = { id: string; prompt: string; options: string[]; passed: boolean };
+export type LessonTimedNote = { id: string; seconds: number; body: string; exportedNoteId: string | null; createdAt: string };
+export type LearningLesson = { id: string; title: string; position: number; durationMinutes: number; videoId: string | null; startSeconds: number; endSeconds: number | null; article: string; completed: boolean; known: boolean; questions: LearningQuestion[]; notes: LessonTimedNote[] };
+export type CourseView = { objectiveId: string; dailyMinutes: number; progress: number; lessons: LearningLesson[]; plan: { day: number; lessonId: string; title: string; minutes: number; offsetMinutes: number }[]; draftRequestsToday: number };
+export type QuestionDraft = { prompt: string; options: string[]; correctIndex: number; explanation: string; replaySeconds: number; sourceQuote: string };
+export type LessonDraft = { title: string; article: string; questions: QuestionDraft[]; reviewRequired: boolean; timestamped: boolean };
+export type LessonInput = { title: string; videoUrl: string; durationMinutes: number; startSeconds: number | null; endSeconds: number | null; article: string; questions: QuestionDraft[] | null; aiDraft: boolean; reviewed: boolean };
+export type LessonFeedback = { correct: boolean; correctIndex: number; explanation: string; replaySeconds: number; sourceQuote: string; known: boolean };
+export const getCourse = (id: string) => apiRequest<CourseView>(`/learning/objectives/${id}/course`);
+export const setCoursePace = (id: string, dailyMinutes: number) => apiRequest<CourseView>(`/learning/objectives/${id}/pace`, { method: "PUT", body: JSON.stringify({ dailyMinutes }) });
+export const addCourseLesson = (id: string, lesson: LessonInput) => apiRequest<{ id: string }>(`/learning/objectives/${id}/lessons`, { method: "POST", body: JSON.stringify(lesson) });
+export const editCourseLesson = (id: string, lesson: LessonInput) => apiRequest<CourseView>(`/learning/lessons/${id}`, { method: "PUT", body: JSON.stringify(lesson) });
+export const deleteCourseLesson = (id: string) => apiRequest<CourseView>(`/learning/lessons/${id}`, { method: "DELETE" });
+export const setLessonComplete = (id: string, completed: boolean) => apiRequest<CourseView>(`/learning/lessons/${id}/state`, { method: "PATCH", body: JSON.stringify({ completed }) });
+export const addLessonQuestion = (id: string, question: QuestionDraft) => apiRequest<CourseView>(`/learning/lessons/${id}/questions`, { method: "POST", body: JSON.stringify(question) });
+export const removeLessonQuestion = (id: string) => apiRequest<CourseView>(`/learning/questions/${id}`, { method: "DELETE" });
+export const answerLessonQuestion = (id: string, choice: number, placement: boolean) => apiRequest<LessonFeedback>(`/learning/questions/${id}/answer`, { method: "POST", body: JSON.stringify({ choice, placement }) });
+export const addLessonTimedNote = (id: string, seconds: number, body: string) => apiRequest<CourseView>(`/learning/lessons/${id}/notes`, { method: "POST", body: JSON.stringify({ seconds, body }) });
+export const removeLessonTimedNote = (id: string) => apiRequest<CourseView>(`/learning/lesson-notes/${id}`, { method: "DELETE" });
+export const exportLessonTimedNote = (id: string) => apiRequest<{ id: string }>(`/learning/lesson-notes/${id}/save-note`, { method: "POST" });
+export const generateLessonDraft = (id: string, title: string, transcript: string) => apiRequest<LessonDraft>(`/learning/objectives/${id}/lesson-draft`, { method: "POST", body: JSON.stringify({ title, transcript }) });

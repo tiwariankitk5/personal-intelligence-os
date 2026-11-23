@@ -1,0 +1,117 @@
+name: Verify PIOS
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fastapi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: pios
+          POSTGRES_USER: pios
+          POSTGRES_PASSWORD: pios-validation-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U pios -d pios"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DB_URL: postgresql://127.0.0.1:5432/pios
+      PIOS_TEST_DATABASE_URL: postgresql://127.0.0.1:5432/pios
+      DB_USERNAME: pios
+      DB_PASSWORD: pios-validation-only
+      APP_JWT_SECRET_BASE64: cGlvcy10ZXN0LXNlY3JldC1rZXktMzItYnl0ZXMhISE=
+      PIOS_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      PIOS_STORAGE_PATH: /tmp/pios-validation-uploads
+      PIOS_ALLOW_LOCAL_MODELS: 'true'
+      PIOS_AUTH_REGISTER_IP_LIMIT: '20'
+      PIOS_AUTH_COOLDOWN_SECONDS: '2'
+      PIOS_RAG_WORKER_DELAY_MS: '250'
+      PIOS_TEST_API_URL: http://127.0.0.1:8080/api/v1
+      PIOS_RAG_FIXTURE_URL: http://127.0.0.1:1234/v1
+      PIOS_RAG_FIXTURE_CONTROL: http://127.0.0.1:1234
+      PIOS_RAG_FIXTURE_PORT: '1234'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend-python/requirements*.txt
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: pip install -r backend-python/requirements-dev.txt
+      - run: python -m pytest -q
+        working-directory: backend-python
+      - run: python -m ruff check backend-python/pios backend-python/tests
+      - run: python -m pip_audit -r backend-python/requirements.txt
+      - name: Existing API, RAG, learning and authentication contracts
+        env:
+          PIOS_AUTH_SMOKE_DISPOSABLE: 'true'
+        run: |
+          python -m uvicorn pios.main:create_app --factory --app-dir backend-python --host 127.0.0.1 --port 8080 --no-proxy-headers --no-access-log > /tmp/fastapi.log 2>&1 &
+          node scripts/rag-test-provider.mjs > /tmp/fixture.log 2>&1 &
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/actuator/health > /dev/null; then ready=true; break; fi
+            sleep 2
+          done
+          if [ "$ready" != true ]; then cat /tmp/fastapi.log; exit 1; fi
+          node scripts/smoke-test.mjs
+          node scripts/rag-smoke-test.mjs
+          node scripts/learning-smoke-test.mjs
+          node scripts/auth-abuse-smoke.mjs
+      - run: docker build -f backend-python/Dockerfile -t pios-fastapi:ci .
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run typecheck
+      - run: npm run build
+
+  desktop-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm audit --audit-level=moderate
+
+  recovery-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test scripts/recovery-crypto.test.mjs

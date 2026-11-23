@@ -4,3 +4,15 @@
 **/.next
 **/target
 **/*.log
+
+.recovery
+.validation
+.deployment
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+desktop/dist
+**/.env*
+**/*.key
+**/*.pem

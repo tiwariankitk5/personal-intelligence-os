@@ -1,12 +1,16 @@
 # Personal Intelligence OS (PIOS) — runnable V1
 
-PIOS is a self-hostable knowledge workspace. This repository contains a connected Next.js frontend, Java 21 / Spring Boot API, PostgreSQL with pgvector, account authentication, private folders and notes, PDF/TXT/Markdown ingestion, learning objectives, encrypted Bring-Your-Own-Key (BYOK) provider settings, local-model connections and workspace-grounded AI chat.
+PIOS is a self-hostable knowledge workspace. This repository contains a connected Next.js frontend, Python / FastAPI API, PostgreSQL with pgvector, account authentication, private folders and notes, PDF/TXT/Markdown ingestion, learning objectives, encrypted Bring-Your-Own-Key (BYOK) provider settings, local-model connections and workspace-grounded AI chat. The backend is implemented entirely in `backend-python/`. See [the migration guide](docs/FASTAPI_MIGRATION.md).
 
 This is a **runnable V1 foundation**, not the complete long-term PIOS vision or a hardened public SaaS release. The implementation status and limitations are listed below.
 
+The current target is a public multi-user product, with a self-hosted edition. See [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) for the Python/AI/RAG/Docker/Kubernetes roadmap and [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for release blockers and verification evidence.
+
+The integrated editor adds page covers/settings, searchable slash commands, code/tables, inline diagrams, a persistent Draft scratchpad and CSV/HTML/print exports. Read [accepted requirements](docs/ACCEPTED_REQUIREMENTS.md) and [editor validation](docs/EDITOR_VALIDATION.md) for delivered scope, test evidence and remaining work. A distributed systems study guide is in [docs/study-notes](docs/study-notes/distributed-systems.md).
+
 ## What works in V1
 
-- Register and sign in with email/password; passwords are BCrypt-hashed and API access uses signed JWTs.
+- Register and sign in with email/password; passwords are BCrypt-hashed. The browser uses an HttpOnly server-side session cookie with CSRF protection. Explicit bearer-token endpoints remain available for API clients.
 - User-scoped workspace data: folders, notes, sources, learning objectives, AI provider connections and chat conversations.
 - Persistent note editor with rich-text formatting, pin/archive, colours, search, sorting, drag reorder, folder creation and quick capture. Notes are stored in PostgreSQL, not browser-only local storage.
 - Destination suggestions for quick capture using local keyword matching. Users can choose a folder, create a folder, append to a similar existing page or create a separate note. The current suggestion logic is heuristic, not an autonomous AI agent.
@@ -14,7 +18,7 @@ This is a **runnable V1 foundation**, not the complete long-term PIOS vision or 
 - Search stored source titles and text.
 - Connect cloud AI with a provider API key, or connect a compatible local model server. V1 includes OpenAI-compatible endpoints (including OpenAI, OpenRouter, Groq, DeepSeek, Mistral and compatible gateways), Anthropic Messages API, and Google Gemini API.
 - Provider keys are encrypted at rest with AES-256-GCM. They are never returned to the browser after saving.
-- Test a provider, choose a default provider, and use Ask PIOS. Relevant account-owned notes and sources are selected with keyword scoring, sent to the selected provider, and returned with source metadata citations.
+- Test a provider, choose a default provider, and use Ask PIOS. Relevant account-owned passages are retrieved with PostgreSQL full-text search and, when explicitly configured, embedding/pgvector hybrid search. Answers include numbered passage excerpts. See docs/SEMANTIC_RAG.md.
 - Create learning objectives and update progress.
 - Docker Compose for frontend, backend, PostgreSQL + pgvector and persistent uploaded files.
 
@@ -26,7 +30,7 @@ This is a **runnable V1 foundation**, not the complete long-term PIOS vision or 
 2. Docker Desktop installed and running with the Linux container engine.
 3. A browser.
 
-No local Maven, Java, PostgreSQL or npm installation is needed for the Docker quick-start path. Docker builds the frontend and backend containers.
+No local Python, PostgreSQL or npm installation is needed for the Docker quick-start path. Docker builds the frontend and backend containers.
 
 ### Start PIOS
 
@@ -46,6 +50,8 @@ Open:
 - Backend health: http://localhost:8080/actuator/health
 
 Register a PIOS account in the browser. The first workspace gets default folders (Inbox, Backend Engineering, AI & Machine Learning, Computer Science, Projects and Personal).
+
+If another local application uses these ports, set `PIOS_FRONTEND_PORT`, `PIOS_BACKEND_PORT` and `PIOS_DB_PORT` in `.env`. Container names and volumes are scoped by the Compose project so separate checkouts can coexist. Use a distinct Compose project name when directory names are identical. The launcher detects the configured ports and prints the correct URLs.
 
 ### Stop PIOS
 
@@ -71,6 +77,8 @@ Or inspect logs directly:
 docker compose ps
 docker compose logs -f db backend frontend
 ```
+
+Developers with Node.js 22+ can run `node scripts/smoke-test.mjs` against a disposable running stack. Set `PIOS_TEST_API_URL` when using a non-default API port. The test creates two synthetic accounts and checks sessions, CSRF, notes, sources, uploads, learning progress and cross-account rejection. It does not call AI providers. The test accounts remain in the database, so use local/test environments.
 
 You can also double-click `scripts\start-pios.cmd` to launch the same Windows setup script without changing your PowerShell execution policy.
 
@@ -112,7 +120,11 @@ Base URL: `http://localhost:8080/api/v1`
 | AI chat | `POST /ai/chat`, `GET /ai/conversations`, `GET /ai/conversations/{id}/messages` |
 | Learning | `GET/POST /learning/objectives`, `PATCH/DELETE /learning/objectives/{id}` |
 
-Except registration/login and the health endpoint, API requests require `Authorization: Bearer <accessToken>`.
+The browser authenticates through `POST /auth/session/register` and `POST /auth/session/login`, which return user metadata without a bearer token. It sends cookies with requests and fetches `GET /auth/csrf` before writes, sending the returned header/token. `POST /auth/logout` invalidates the session. Login rotates the session ID and CSRF token. The session has a 30-minute idle timeout.
+
+Session cookies are `HttpOnly` and `SameSite=Lax`, with `Secure` enforced in hosted mode. Production must use HTTPS and a same-site frontend/API deployment. Local HTTP development uses `APP_SESSION_COOKIE_SECURE=false`. Python sessions are stored as hashed opaque tokens in PostgreSQL and shared across replicas/restarts. Migrating from Java requires one fresh sign-in; account passwords and stored content are preserved.
+
+API clients can still obtain bearer tokens through `/auth/register` and `/auth/login`. All unsafe requests, including token issuance and bearer-authenticated writes, now require a CSRF token and its associated session cookie. Fetch `/auth/csrf` with a cookie jar first. Except the public auth/CSRF and health endpoints, requests require an authenticated session or `Authorization: Bearer <accessToken>`.
 
 ## Project layout
 
@@ -121,15 +133,14 @@ pios-v1-fullstack/
 ├── compose.yaml
 ├── .env.example
 ├── scripts/               # Windows start, stop and diagnostics scripts
-├── backend/               # Java 21, Spring Boot, Security, JPA, JDBC, Flyway
-│   └── src/main/resources/db/migration/
+├── backend-python/        # Active FastAPI API, Psycopg, Python tests and Dockerfile
 └── frontend/              # Next.js, React, TypeScript
 ```
 
 ## Architecture and security notes
 
 - The backend is a modular monolith. It is intentionally not split into microservices.
-- PostgreSQL holds user, folder, note, source, provider, conversation and learning records. pgvector is enabled and a vector column exists for the upcoming embedding pipeline.
+- PostgreSQL holds user, folder, note, source, provider, conversation and learning records. pgvector stores configured embedding profiles; durable jobs maintain note/source chunks with owner-scoped retrieval.
 - Uploaded original files are persisted in the `pios-uploads` Docker volume. PostgreSQL is persisted in `pios-postgres-data`.
 - Passwords use BCrypt. JWTs are signed with a 256-bit-or-stronger secret. API keys use AES-256-GCM encryption with a random IV.
 - User-owned queries scope reads/writes to the authenticated user ID. The model does not get direct database access.
@@ -139,18 +150,22 @@ pios-v1-fullstack/
 
 ## Known limitations — not production-ready SaaS yet
 
-- RAG retrieval is keyword-scored over note and extracted source text. The app stores chunks and has a pgvector column, but it does not yet generate embeddings or run semantic/hybrid vector retrieval.
+- Semantic RAG is opt-in: configure a compatible embedding provider separately from chat, allow processing, and set daily call/input limits. Without ready embeddings the app uses keyword fallback. Exact cited passages, indexing status and limits are documented in docs/SEMANTIC_RAG.md.
 - Destination recommendations are local keyword heuristics. AI-assisted folder/page routing is not wired yet.
-- Only one default chat provider is used. Per-task model routing, dedicated embedding/vision models and usage/cost accounting are future work.
+- One default chat provider and a separate embedding model are supported. Embedding calls/input reservations and reported tokens are tracked; broader task/vision routing and monetary billing remain future work.
 - No PIOS-managed provider billing, subscriptions, credit ledger or payment integration.
 - No OAuth integrations for Drive, Gmail, GitHub, Slack, Calendar or other external applications.
 - No desktop menu-bar/notch quick-capture companion; the current quick capture runs inside the PIOS browser tab.
 - No agent workflow execution, organisation multi-tenancy, collaboration, realtime sync, full concept graph extraction, advanced curriculum generation or spaced-repetition scheduler.
 - Scanned PDFs need OCR; OCR is not enabled. URL crawling and YouTube ingestion are not included.
-- The frontend currently stores the access token in browser localStorage. Before public deployment, move authentication to secure HttpOnly cookies and apply a reviewed CSRF strategy.
+- Browser authentication uses persistent shared HttpOnly sessions, CSRF tokens and database-backed authentication abuse controls. Account recovery/verification, broader AI abuse/spending controls, hosted validation and an independent security review remain required for a public service.
 - Add API rate limits, provider spend limits, robust SSRF/egress controls for custom model endpoints, account deletion/export, database and file backups, HTTPS, logging/monitoring, malware scanning and a security review before public/multi-tenant deployment.
-- This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The Spring Boot 3.5.16 line is the final OSS 3.5.x release; plan a tested move to a supported 4.x line before long-term production maintenance.
+- This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The active Python API needs the operational and security work in the release checklist; previous implementations remain only in Git history.
 
 ## Developer setup without Docker
 
-Requires Java 21, Maven 3.6.3+, Node.js 22.16.0 and PostgreSQL 16 with the pgvector extension. Create a database named `pios`, then set the environment variables from `.env.example`. Run the backend with `mvn spring-boot:run` from `backend`, then run `npm.cmd install` and `npm.cmd run dev` from `frontend` on Windows. If PowerShell blocks `npm.ps1`, use `npm.cmd` as shown. The browser frontend uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1`.
+Requires Python 3.12+, Node.js 22+ and PostgreSQL 16 with pgvector. See [FastAPI setup and verification](docs/FASTAPI_MIGRATION.md). Set the database/secrets environment variables, install `backend-python/requirements-dev.txt` in a virtual environment, then start `uvicorn pios.main:create_app --factory --app-dir backend-python --host 127.0.0.1 --port 8080 --no-proxy-headers --no-access-log`. Run `npm.cmd ci` and `npm.cmd run dev` from `frontend` on Windows. The browser frontend uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1`.
+
+## Recover on another device
+
+See [docs/RECOVERY.md](docs/RECOVERY.md) for encrypted saved-data snapshots, protected GitHub recovery-key retrieval, and restoration into a fresh Docker project. Source/lockfiles rebuild dependencies; private release assets preserve the Windows companion and encrypted database/uploads/configuration. Do not commit raw .env files, database dumps, or recovery keys.

@@ -1,0 +1,7 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {appOrigin,trustedFrame,noteId,edgeBounds}=require('../policy.cjs');
+test('remote apps require HTTPS and origin-only configuration',()=>{assert.equal(appOrigin(),'http://localhost:3100');assert.equal(appOrigin('https://pios.example'),'https://pios.example');for(const value of ['http://example.com','https://example.com/path','https://a:b@example.com','file:///a','https://example.com/?token=secret'])assert.throws(()=>appOrigin(value));});
+test('IPC accepts only the exact trusted origin and Peek route',()=>{for(const value of ['https://evil.test/peek','https://pios.example.evil/peek','https://pios.example/','data:text/html,x'])assert.equal(trustedFrame(value,'https://pios.example'),false);assert(trustedFrame('https://pios.example/peek?note=abc','https://pios.example'));assert(noteId('fd7db33e-390f-47f2-859e-187fca84d85f'));assert(!noteId('../escape'));});
+test('edge bounds respect negative-coordinate monitors and small displays',()=>{assert.deepEqual(edgeBounds({x:-1920,y:0,width:1920,height:1080},'right',false),{x:-34,y:465,width:34,height:150});const bounds=edgeBounds({x:0,y:0,width:320,height:480},'left',true);assert.deepEqual(bounds,{x:0,y:0,width:320,height:480});});
+
+test('colored note tabs grow the collapsed dock within the display',()=>{const area={x:0,y:20,width:1280,height:300};assert.equal(edgeBounds(area,'right',false,8).height,300);assert.equal(edgeBounds({...area,height:1000},'right',false,8).height,688);});

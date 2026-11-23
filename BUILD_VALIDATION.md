@@ -2,6 +2,19 @@
 
 This file records checks actually completed when this archive was prepared.
 
+## Local verification on 2026-11-04
+
+- Frontend dependency install, `npm run typecheck` and `npm run build`: passed.
+- Backend `mvn -B test`: passed, 12 tests with zero failures/errors (JDK 25 compiling for Java 21).
+- Browser session integration tests verify session ID rotation, authenticated reads, CSRF-protected login/writes/logout, stale-token rejection, invalid credentials, no returned browser JWT, and session invalidation on logout.
+- Added four source-deletion regression tests, including cross-account rejection.
+- GitHub Actions verification is configured but has not yet executed remotely.
+- Docker engine started; both images built and the isolated Compose stack passed backend health and frontend readiness.
+- Actual PostgreSQL + pgvector and Flyway startup passed. `node scripts/smoke-test.mjs` passed against port 8180: real session cookie flags, CSRF, account-scoped notes/sources/objectives, upload, deletion and logout.
+- Browser verification passed registration, reload/session restoration, quick capture, note persistence after reload and sign-out. Screenshot evidence is local under `backend/target/pios-browser-verification.png` (ignored build output).
+- Full browser automation, external AI-provider calls, HTTPS and idle-expiry timing are still outstanding.
+- See `PRODUCTION_READINESS.md` for the public multi-user release assessment. Older archive checks below are historical.
+
 ## Checks completed
 
 - `frontend/package.json`: valid JSON.

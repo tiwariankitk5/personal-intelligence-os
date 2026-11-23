@@ -1,0 +1,34 @@
+name: Recover PIOS key
+on:
+  push:
+    branches:
+      - 'recovery/key-request-*'
+    paths:
+      - '.github/recovery-key-request.json'
+permissions:
+  contents: read
+jobs:
+  recover:
+    if: github.event.repository.private == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prepare protected recovery key
+        env:
+          RECOVERY_KEY: ${{ secrets.PIOS_RECOVERY_KEY }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const key = process.env.RECOVERY_KEY || '';
+          if (Buffer.from(key, 'base64').length !== 32) throw new Error('Recovery key is not configured');
+          const folder = path.join(process.env.RUNNER_TEMP, 'pios-recovery-key');
+          fs.mkdirSync(folder, {recursive: true});
+          fs.writeFileSync(path.join(folder, 'recovery-key.txt'), key.trim() + '\n', {mode: 0o600});
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pios-recovery-key
+          path: ${{ runner.temp }}/pios-recovery-key/recovery-key.txt
+          retention-days: 1
+          if-no-files-found: error

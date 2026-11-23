@@ -5,6 +5,7 @@ This is the connected Next.js frontend for the PIOS full-stack V1. It uses the S
 ## Connected features
 
 - Registration, sign-in and sign-out.
+- Browser authentication uses HttpOnly backend session cookies; the API client includes credentials and fetches a CSRF token for writes. Previous localStorage credentials are discarded. Use a same-site frontend/API deployment with HTTPS in production.
 - Account-backed folders and notes with rich-text editing, colours, pinning, archive, search, sorting, drag reordering and quick capture.
 - Local keyword-based destination suggestions, existing-page matching and folder creation.
 - Knowledge source upload for PDF/TXT/Markdown and pasted text.
