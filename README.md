@@ -1,10 +1,10 @@
 # Personal Intelligence OS (PIOS) — runnable V1
 
-PIOS is a self-hostable knowledge workspace. This repository contains a connected Next.js frontend, Java 21 / Spring Boot API, PostgreSQL with pgvector, account authentication, private folders and notes, PDF/TXT/Markdown ingestion, learning objectives, encrypted Bring-Your-Own-Key (BYOK) provider settings, local-model connections and workspace-grounded AI chat.
+PIOS is a self-hostable knowledge workspace. This repository contains a connected Next.js frontend, Python / FastAPI API, PostgreSQL with pgvector, account authentication, private folders and notes, PDF/TXT/Markdown ingestion, learning objectives, encrypted Bring-Your-Own-Key (BYOK) provider settings, local-model connections and workspace-grounded AI chat. The previous Spring Boot source remains in `backend/` for rollback; the active backend is `backend-python/`. See [the migration guide](docs/FASTAPI_MIGRATION.md).
 
 This is a **runnable V1 foundation**, not the complete long-term PIOS vision or a hardened public SaaS release. The implementation status and limitations are listed below.
 
-The current target is a public multi-user product, with a self-hosted edition. See [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) for the Java/AI/RAG/Docker/Kubernetes roadmap and [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for release blockers and verification evidence.
+The current target is a public multi-user product, with a self-hosted edition. See [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) for the Python/AI/RAG/Docker/Kubernetes roadmap and [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for release blockers and verification evidence.
 
 The integrated editor adds page covers/settings, searchable slash commands, code/tables, inline diagrams, a persistent Draft scratchpad and CSV/HTML/print exports. Read [accepted requirements](docs/ACCEPTED_REQUIREMENTS.md) and [editor validation](docs/EDITOR_VALIDATION.md) for delivered scope, test evidence and remaining work. A distributed systems study guide is in [docs/study-notes](docs/study-notes/distributed-systems.md).
 
@@ -122,7 +122,7 @@ Base URL: `http://localhost:8080/api/v1`
 
 The browser authenticates through `POST /auth/session/register` and `POST /auth/session/login`, which return user metadata without a bearer token. It sends cookies with requests and fetches `GET /auth/csrf` before writes, sending the returned header/token. `POST /auth/logout` invalidates the session. Login rotates the session ID and CSRF token. The session has a 30-minute idle timeout.
 
-Session cookies default to `Secure`, `HttpOnly` and `SameSite=Lax`. Production must use HTTPS and a same-site frontend/API deployment. The local Docker Compose stack explicitly sets `APP_SESSION_COOKIE_SECURE=false` for HTTP localhost; direct local backend development needs the same setting. Old browser-local tokens are removed and users must sign in again after upgrading. Sessions are currently in-memory: restarts sign users out and multiple backend replicas require shared session storage before rollout.
+Session cookies are `HttpOnly` and `SameSite=Lax`, with `Secure` enforced in hosted mode. Production must use HTTPS and a same-site frontend/API deployment. Local HTTP development uses `APP_SESSION_COOKIE_SECURE=false`. Python sessions are stored as hashed opaque tokens in PostgreSQL and shared across replicas/restarts. Migrating from Java requires one fresh sign-in; account passwords and stored content are preserved.
 
 API clients can still obtain bearer tokens through `/auth/register` and `/auth/login`. All unsafe requests, including token issuance and bearer-authenticated writes, now require a CSRF token and its associated session cookie. Fetch `/auth/csrf` with a cookie jar first. Except the public auth/CSRF and health endpoints, requests require an authenticated session or `Authorization: Bearer <accessToken>`.
 
@@ -133,7 +133,8 @@ pios-v1-fullstack/
 ├── compose.yaml
 ├── .env.example
 ├── scripts/               # Windows start, stop and diagnostics scripts
-├── backend/               # Java 21, Spring Boot, Security, JPA, JDBC, Flyway
+├── backend-python/        # Active FastAPI API, Psycopg, Python tests and Dockerfile
+├── backend/               # Previous Spring Boot source; immutable SQL history and rollback
 │   └── src/main/resources/db/migration/
 └── frontend/              # Next.js, React, TypeScript
 ```
@@ -159,13 +160,13 @@ pios-v1-fullstack/
 - No desktop menu-bar/notch quick-capture companion; the current quick capture runs inside the PIOS browser tab.
 - No agent workflow execution, organisation multi-tenancy, collaboration, realtime sync, full concept graph extraction, advanced curriculum generation or spaced-repetition scheduler.
 - Scanned PDFs need OCR; OCR is not enabled. URL crawling and YouTube ingestion are not included.
-- Browser authentication now uses HttpOnly session cookies and CSRF tokens. Shared session persistence, account recovery and verification, abuse controls, deployment/browser validation and an independent security review remain required for a public service.
+- Browser authentication uses persistent shared HttpOnly sessions, CSRF tokens and database-backed authentication abuse controls. Account recovery/verification, broader AI abuse/spending controls, hosted validation and an independent security review remain required for a public service.
 - Add API rate limits, provider spend limits, robust SSRF/egress controls for custom model endpoints, account deletion/export, database and file backups, HTTPS, logging/monitoring, malware scanning and a security review before public/multi-tenant deployment.
-- This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The Spring Boot 3.5.16 line is the final OSS 3.5.x release; plan a tested move to a supported 4.x line before long-term production maintenance.
+- This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The active Python API needs the operational and security work in the release checklist; the previous Java implementation remains available during the rollback window.
 
 ## Developer setup without Docker
 
-Requires Java 21, Maven 3.6.3+, Node.js 22.16.0 and PostgreSQL 16 with the pgvector extension. Create a database named `pios`, then set the environment variables from `.env.example`. Run the backend with `mvn spring-boot:run` from `backend`, then run `npm.cmd install` and `npm.cmd run dev` from `frontend` on Windows. If PowerShell blocks `npm.ps1`, use `npm.cmd` as shown. The browser frontend uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1`.
+Requires Python 3.12+, Node.js 22+ and PostgreSQL 16 with pgvector. See [FastAPI setup and verification](docs/FASTAPI_MIGRATION.md). Set the database/secrets environment variables, install `backend-python/requirements-dev.txt` in a virtual environment, then start `uvicorn pios.main:create_app --factory --app-dir backend-python --host 127.0.0.1 --port 8080 --no-proxy-headers --no-access-log`. Run `npm.cmd ci` and `npm.cmd run dev` from `frontend` on Windows. The browser frontend uses `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1`.
 
 ## Recover on another device
 

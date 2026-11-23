@@ -1,5 +1,7 @@
 # Public multi-user release assessment
 
+Current backend decision (2026-11-23): FastAPI/Python replaces Spring Boot in the active Compose deployment. See `docs/FASTAPI_MIGRATION.md` for current migration, rollback and verification evidence. Shared sessions are implemented; this historical initial assessment below is not a claim that deployment, recovery emails, upload isolation, AI spending controls, conflict recovery, scheduled backups/alerts, privacy lifecycle, billing or real-device certification are complete.
+
 Target confirmed by the owner: a public application with multiple users. Scope is this repository, including its existing feature branches. Assessment started 2026-11-04 against main commit `0c8ba20`.
 
 ## Verified baseline

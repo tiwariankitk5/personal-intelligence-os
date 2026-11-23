@@ -6,7 +6,8 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN useradd --system --uid 10001 --create-home pios && mkdir -p /app/data/uploads && chown -R pios:pios /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --create-home pios && mkdir -p /app/data/uploads && chown -R pios:pios /app
 COPY --from=build /workspace/target/personal-intelligence-os-0.1.0-SNAPSHOT.jar /app/app.jar
 USER 10001
 EXPOSE 8080

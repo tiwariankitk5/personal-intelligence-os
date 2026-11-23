@@ -1,4 +1,7 @@
 spring:
+  autoconfigure:
+    # Hosted sessions are explicitly enabled by PersistentSessionConfiguration.
+    exclude: org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
   application:
     name: personal-intelligence-os
   datasource:

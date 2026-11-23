@@ -18,7 +18,8 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend-python/Dockerfile
     restart: unless-stopped
     environment:
       SERVER_PORT: 8080

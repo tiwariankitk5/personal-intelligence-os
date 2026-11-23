@@ -2,7 +2,7 @@
 
 ## Objective
 
-Build a public, multi-user knowledge application that can serve paying clients and demonstrate the owner's full-stack Java, AI engineering and deployment skills. Keep a runnable self-hosted edition. Validate the first paying customer segment before expanding the feature set.
+Build a public, multi-user knowledge application that can serve paying clients and demonstrate the owner's Python, AI engineering and deployment skills. The owner selected FastAPI on 2026-11-23; Spring Boot remains historical source for rollback. Keep a runnable self-hosted edition. Validate the first paying customer segment before expanding the feature set.
 
 The owner wants to serve students/professionals, freelancers/small teams and businesses. Use one shared knowledge engine with audience-specific onboarding: studying from notes, finding client/project material, and answering internal knowledge questions. Business team permissions and administration require additional implementation and testing; personal account isolation is not organisation tenancy.
 
@@ -15,7 +15,7 @@ An account uploads documents, sees their processing state, asks a question, rece
 | Area | Implementation direction | Evidence required |
 | --- | --- | --- |
 | Frontend | Next.js, React, TypeScript; accessible, responsive workspace with onboarding and reliable error/retry states | Browser tests, screenshots and an accessible working demo |
-| Java backend | Spring Boot modular monolith; account authorisation, ingestion jobs, AI gateway, usage and billing boundaries | API contracts, isolation tests, observable request/job lifecycle |
+| Python backend | FastAPI modular monolith; account authorisation, ingestion jobs, AI gateway, usage and billing boundaries | API contracts, isolation tests, observable request/job lifecycle |
 | Relational storage | PostgreSQL, Flyway migrations and transactional application data | Real migration/integration tests and a restore demonstration |
 | Vector retrieval | pgvector for embeddings; independent embedding model configuration; lexical + vector retrieval with account filters | Retrieval evaluation dataset, measured relevance and citation correctness |
 | RAG | Bounded parsing, chunking, asynchronous indexing, hybrid retrieval, optional reranking, grounded generation and passage citations | Tests for ingestion failures, irrelevant evidence, private-data isolation and prompt injection |

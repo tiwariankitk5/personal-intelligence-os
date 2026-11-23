@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('piosDesktop',Object.freeze({
   expand:value=>ipcRenderer.invoke('peek:expand',value),
   side:value=>ipcRenderer.invoke('peek:side',value),
   close:()=>ipcRenderer.invoke('peek:close'),
+  hideOverlays:()=>ipcRenderer.invoke('peek:hide-overlays'),
+  capturePrivacy:value=>ipcRenderer.invoke('peek:privacy',value),
   state:()=>ipcRenderer.invoke('peek:state'),
   onState:callback=>{const listener=(_event,state)=>callback(state);ipcRenderer.on('peek:state',listener);return()=>ipcRenderer.removeListener('peek:state',listener);},
 }));

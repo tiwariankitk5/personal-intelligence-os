@@ -47,7 +47,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login",
                                 "/api/v1/auth/session/register", "/api/v1/auth/session/login",
-                                "/api/v1/auth/csrf", "/actuator/health").permitAll()
+                                "/api/v1/auth/csrf", "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))

@@ -31,3 +31,6 @@ The screen recording supplied on 2026-11-05 guided colored individual tabs, hove
 The native and main browser views share frontend/src/components/floating-note-editor.tsx so direct editing/autosave stay consistent. Web floating panels now edit directly too; their dragging/expanding stays inside the browser.
 
 Peek is now scoped to the dedicated Peek notes folder. New Peek note creates/reuses that folder and opens an untitled editor immediately. Existing notebook notes are not imported or moved. The browser and native renderer share the reference-style handwriting cards and formatting bar; animations honor reduced motion.
+# Presentation privacy
+
+The updated Windows build enables capture exclusion for Peek's edge and note windows. Use the tray or deck checkbox to change it, and Ctrl/Cmd+Alt+H to hide/reveal all overlays. Confirm the actual meeting preview before relying on exclusion; macOS capture exclusion is not enabled. Browser Peek has a separate Hide Peek button and Alt+Shift+H shortcut. See [privacy behavior and verification](../docs/PEEK_PRIVACY.md).
