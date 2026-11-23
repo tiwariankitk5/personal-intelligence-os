@@ -6,8 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 COPY backend-python/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend-python/pios /app/pios
-COPY backend-python/migrations /app/python-migrations
-COPY backend/src/main/resources/db/migration /app/migrations
+COPY backend-python/migrations/P*.sql /app/python-migrations/
+COPY backend-python/migrations/legacy /app/migrations
 # Python extensions live next to the package; original Flyway SQL remains unchanged.
 USER pios
 EXPOSE 8080

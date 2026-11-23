@@ -3,9 +3,7 @@ param(
     [switch]$Build,
     [switch]$Audit,
     [switch]$Smoke,
-    [string]$MavenPath,
     [string]$PythonPath,
-    [switch]$LegacyJava,
     [string]$ApiUrl,
     [switch]$Plan
 )
@@ -23,7 +21,6 @@ if ($Scope -in @('frontend', 'full')) {
     if ($Audit) { $steps += @{ Name='frontend-audit'; Dir='frontend'; Exe=$npm; Args=@('audit','--omit=dev','--audit-level=high') } }
 }
 if ($Scope -in @('backend', 'full')) {
-    if (-not $LegacyJava) {
         if (-not $PythonPath) {
             $PythonPath = Join-Path $root 'backend-python/.venv/Scripts/python.exe'
             if (-not (Test-Path $PythonPath)) { $PythonPath = Join-Path $root 'backend-python/.venv/bin/python' }
@@ -33,19 +30,7 @@ if ($Scope -in @('backend', 'full')) {
         $steps += @{ Name='backend-python-lint'; Dir='backend-python'; Exe=$PythonPath; Args=@('-m','ruff','check','pios','tests') }
         if ($Build) { $steps += @{ Name='backend-python-build'; Dir=''; Exe='docker'; Args=@('build','-f','backend-python/Dockerfile','-t','pios-fastapi:verified','.') } }
         if ($Audit) { $steps += @{ Name='backend-python-audit'; Dir='backend-python'; Exe=$PythonPath; Args=@('-m','pip_audit','-r','requirements.txt') } }
-    } else {
-    if (-not $MavenPath) {
-        $maven = Get-Command mvn -ErrorAction SilentlyContinue
-        if ($maven) { $MavenPath = $maven.Source }
-        elseif ($env:OS -eq 'Windows_NT') {
-            $MavenPath = Get-ChildItem "$env:ProgramFiles/JetBrains/IntelliJ IDEA */plugins/maven/lib/maven3/bin/mvn.cmd" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
-        }
-        if (-not $MavenPath) { $MavenPath = 'mvn' }
-    }
-    $goal = 'test'
-    if ($Build) { $goal = 'verify' }
-    $steps += @{ Name='backend-tests'; Dir='backend'; Exe=$MavenPath; Args=@('-B',$goal) }
-    }
+
 }
 if ($Smoke) { $steps += @{ Name='api-smoke'; Dir=''; Exe='node'; Args=@('scripts/smoke-test.mjs') } }
 if ($Plan) {

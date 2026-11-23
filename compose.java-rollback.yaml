@@ -1,7 +1,0 @@
-# Run with: docker compose -f compose.yaml -f compose.java-rollback.yaml up -d --build backend
-# Uses the SAME database/uploads and secrets. Never run `down -v` during rollback.
-services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile

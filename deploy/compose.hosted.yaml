@@ -24,8 +24,8 @@ services:
     build: {context: .., dockerfile: backend-python/Dockerfile}
     restart: unless-stopped
     environment:
-      SPRING_PROFILES_ACTIVE: hosted
-      DB_URL: jdbc:postgresql://db:5432/pios
+      PIOS_ENV: hosted
+      DB_URL: postgresql://db:5432/pios
       DB_USERNAME: pios
       PIOS_PUBLIC_ORIGIN: ${PIOS_PUBLIC_ORIGIN:?Set the public HTTPS origin}
       PIOS_STORAGE_PATH: /app/data/uploads

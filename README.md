@@ -1,6 +1,6 @@
 # Personal Intelligence OS (PIOS) — runnable V1
 
-PIOS is a self-hostable knowledge workspace. This repository contains a connected Next.js frontend, Python / FastAPI API, PostgreSQL with pgvector, account authentication, private folders and notes, PDF/TXT/Markdown ingestion, learning objectives, encrypted Bring-Your-Own-Key (BYOK) provider settings, local-model connections and workspace-grounded AI chat. The previous Spring Boot source remains in `backend/` for rollback; the active backend is `backend-python/`. See [the migration guide](docs/FASTAPI_MIGRATION.md).
+PIOS is a self-hostable knowledge workspace. This repository contains a connected Next.js frontend, Python / FastAPI API, PostgreSQL with pgvector, account authentication, private folders and notes, PDF/TXT/Markdown ingestion, learning objectives, encrypted Bring-Your-Own-Key (BYOK) provider settings, local-model connections and workspace-grounded AI chat. The backend is implemented entirely in `backend-python/`. See [the migration guide](docs/FASTAPI_MIGRATION.md).
 
 This is a **runnable V1 foundation**, not the complete long-term PIOS vision or a hardened public SaaS release. The implementation status and limitations are listed below.
 
@@ -30,7 +30,7 @@ The integrated editor adds page covers/settings, searchable slash commands, code
 2. Docker Desktop installed and running with the Linux container engine.
 3. A browser.
 
-No local Maven, Java, PostgreSQL or npm installation is needed for the Docker quick-start path. Docker builds the frontend and backend containers.
+No local Python, PostgreSQL or npm installation is needed for the Docker quick-start path. Docker builds the frontend and backend containers.
 
 ### Start PIOS
 
@@ -134,8 +134,6 @@ pios-v1-fullstack/
 ├── .env.example
 ├── scripts/               # Windows start, stop and diagnostics scripts
 ├── backend-python/        # Active FastAPI API, Psycopg, Python tests and Dockerfile
-├── backend/               # Previous Spring Boot source; immutable SQL history and rollback
-│   └── src/main/resources/db/migration/
 └── frontend/              # Next.js, React, TypeScript
 ```
 
@@ -162,7 +160,7 @@ pios-v1-fullstack/
 - Scanned PDFs need OCR; OCR is not enabled. URL crawling and YouTube ingestion are not included.
 - Browser authentication uses persistent shared HttpOnly sessions, CSRF tokens and database-backed authentication abuse controls. Account recovery/verification, broader AI abuse/spending controls, hosted validation and an independent security review remain required for a public service.
 - Add API rate limits, provider spend limits, robust SSRF/egress controls for custom model endpoints, account deletion/export, database and file backups, HTTPS, logging/monitoring, malware scanning and a security review before public/multi-tenant deployment.
-- This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The active Python API needs the operational and security work in the release checklist; the previous Java implementation remains available during the rollback window.
+- This self-hosted V1 is for local development and early testing, not a certified multi-tenant service. The active Python API needs the operational and security work in the release checklist; previous implementations remain only in Git history.
 
 ## Developer setup without Docker
 

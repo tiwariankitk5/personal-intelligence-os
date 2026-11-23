@@ -2,7 +2,7 @@
 
 ## Objective
 
-Build a public, multi-user knowledge application that can serve paying clients and demonstrate the owner's Python, AI engineering and deployment skills. The owner selected FastAPI on 2026-11-23; Spring Boot remains historical source for rollback. Keep a runnable self-hosted edition. Validate the first paying customer segment before expanding the feature set.
+Build a public, multi-user knowledge application that can serve paying clients and demonstrate the owner's Python, AI engineering and deployment skills. The owner selected FastAPI on 2026-11-23; the previous Java source has been removed from the active branch. Keep a runnable self-hosted edition. Validate the first paying customer segment before expanding the feature set.
 
 The owner wants to serve students/professionals, freelancers/small teams and businesses. Use one shared knowledge engine with audience-specific onboarding: studying from notes, finding client/project material, and answering internal knowledge questions. Business team permissions and administration require additional implementation and testing; personal account isolation is not organisation tenancy.
 

@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
     environment:
       SERVER_PORT: 8080
-      DB_URL: jdbc:postgresql://db:5432/pios
+      DB_URL: postgresql://db:5432/pios
       DB_USERNAME: pios
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       APP_JWT_SECRET_BASE64: ${APP_JWT_SECRET_BASE64:?Set APP_JWT_SECRET_BASE64 in .env}

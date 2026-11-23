@@ -17,9 +17,11 @@ def open_pool(settings):
 
 
 def migrate(pool):
-    root = Path(__file__).resolve().parents[2] / "backend/src/main/resources/db/migration"
+    root = Path(__file__).resolve().parents[1] / "migrations/legacy"
     if not root.exists():
         root = Path("/app/migrations")
+    if len(list(root.glob("V*__*.sql"))) != 8:
+        raise RuntimeError("Required database migration history is missing; refusing to start.")
     with pool.connection() as conn:
         conn.execute("SELECT pg_advisory_xact_lock(811723911)")
         conn.execute('''CREATE TABLE IF NOT EXISTS flyway_schema_history (
@@ -48,7 +50,7 @@ def migrate(pool):
         extensions = Path("/app/python-migrations")
         if not extensions.exists():
             extensions = Path(__file__).resolve().parents[1] / "migrations"
-        for path in sorted(extensions.glob("*.sql")):
+        for path in sorted(extensions.glob("P*.sql")):
             raw = path.read_bytes()
             digest = hashlib.sha256(raw).hexdigest()
             old = conn.execute("SELECT checksum FROM pios_python_migrations WHERE version=%s", (path.name,)).fetchone()

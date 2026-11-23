@@ -1,11 +1,11 @@
 ---
 name: pios-development
-description: Implement and validate bounded features or fixes in the personal-intelligence-os repository, using its existing Java, Next.js and local Compose workflows.
+description: Implement and validate bounded features or fixes in the personal-intelligence-os repository, using its existing Python, Next.js and local Compose workflows.
 ---
 
 # PIOS development
 
-Work from the repository root containing frontend/, backend/ and AGENTS.md. Read AGENTS.md and the short docs/HANDOFF.md once; inspect only requirements relevant to the user's milestone.
+Work from the repository root containing frontend/, backend-python/ and AGENTS.md. Read AGENTS.md and the short docs/HANDOFF.md once; inspect only requirements relevant to the user's milestone.
 
 - Locate affected code with targeted rg searches. Reuse existing components and scripts. Avoid repeatedly reading entire files, generated assets, screenshots or full logs.
 - Separate an implementation issue from a missing local prerequisite before editing. Existing Docker containers may belong to another project; use this repository's Compose project and mapped ports.

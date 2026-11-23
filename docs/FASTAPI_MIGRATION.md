@@ -1,6 +1,6 @@
 # FastAPI backend migration
 
-The active backend is `backend-python/`: Python 3.12 in Docker, FastAPI, Psycopg 3 and PostgreSQL/pgvector. Next.js remains the frontend. `backend/` retains the previous Java implementation and the original V1–V8 SQL files for recovery and historical compatibility. It is not a second required API service.
+The backend is entirely Python: `backend-python/`, Python 3.12 in Docker, FastAPI, Psycopg 3 and PostgreSQL/pgvector. Next.js remains the frontend. Java source, tests, Maven files, runtime configuration and the Java CI job have been removed. Original SQL migrations moved byte-for-byte into `backend-python/migrations/legacy/`; retaining their history protects existing data.
 
 ## Preserved features
 
@@ -29,19 +29,13 @@ Supply the existing database/secrets as environment variables or Docker secret f
 .venv/Scripts/python.exe -m uvicorn pios.main:create_app --factory --host 127.0.0.1 --port 8080 --no-proxy-headers --no-access-log
 ```
 
-API schema: `/openapi.json`; interactive reference: `/docs`; readiness/liveness remain `/actuator/health/readiness` and `/actuator/health/liveness`. Docker uses a non-root user. Runtime dependencies are pinned in `requirements.txt`; development/test tools are separate in `requirements-dev.txt`. `-Build` verifies the image; `-Audit` runs pip-audit. `-LegacyJava` runs the retained Maven checks.
+API schema: `/openapi.json`; interactive reference: `/docs`; readiness/liveness remain `/actuator/health/readiness` and `/actuator/health/liveness`. Docker uses a non-root user. Runtime dependencies are pinned in `requirements.txt`; development/test tools are separate in `requirements-dev.txt`. `-Build` verifies the image; `-Audit` runs pip-audit.
 
 ## Schema and rollback
 
 The startup migrator validates Flyway's existing line-normalized CRC32 history and applies only unapplied original SQL under a PostgreSQL advisory lock. It refuses checksum mismatches. Python-specific additive SQL has a separate SHA-256 history in `pios_python_migrations`. Do not edit an applied migration or repair a mismatch without investigating it.
 
-Before cutover, preserve a known-good Java image and take an encrypted database/uploads snapshot. Local rollback to the saved image can use a private override containing `services.backend.image: pios-java:before-fastapi-20261123`, then `docker compose -f compose.yaml -f OVERRIDE up -d --no-build --no-deps backend`. A source rebuild alternative is:
-
-```powershell
-docker compose -f compose.yaml -f compose.java-rollback.yaml up -d --build --no-deps backend
-```
-
-Never run `down -v`, restore over a live database, overwrite `.env`, or delete the previous implementation as part of rollback. Backend changes may require signing in again. Source backup/push and data backup are separate operations.
+An encrypted database/uploads backup was authenticated before the Python cutover. Previous source versions remain recoverable through Git history. The active branch does not include a Java runtime or rollback build. Roll back using a known-good release and an explicit recovery plan; never run `down -v`, overwrite `.env`, or restore over a live database. Source backup/push and data backup are separate operations.
 
 ## Scaling and remaining release work
 
@@ -58,4 +52,4 @@ Real PostgreSQL tests cover shared/restarted sessions, cross-replica logout, tra
 
 Existing `smoke-test.mjs`, `rag-smoke-test.mjs`, `learning-smoke-test.mjs` and `auth-abuse-smoke.mjs` verify the Python API over HTTP. RAG/lesson generation checks use the explicitly labelled local provider fixture, not paid-provider or real-model quality claims. `fastapi-browser-smoke.cjs` forwards the existing frontend's requests to a real isolated FastAPI Docker service and verifies note loading/reload and learning save/completion. It never redirects the user's normal signed-in browser.
 
-Tests requiring PostgreSQL deliberately skip without `PIOS_TEST_DATABASE_URL`. Java adoption additionally requires `PIOS_JAVA_FIXTURE_URL` and `PIOS_ADOPTION_DATABASE_URL`. These variables must point only to disposable test environments. CI includes the FastAPI checks and retains the Java suite during the rollback window.
+Tests requiring PostgreSQL deliberately skip without `PIOS_TEST_DATABASE_URL`. This variable must point only to a disposable test environment. CI builds and verifies Python. The original cross-language adoption test was run before removal; credential format and persisted-session regression tests remain in Python.
